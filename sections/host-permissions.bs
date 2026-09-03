@@ -2,11 +2,10 @@
 Title: Host permissions
 Shortname: quostibel-host-permissions
 Level: 1
-Status: w3c/CG-DRAFT
-Group: WECG
-Editor: WECG
+Status: DREAM
+Editor: Patrick Kettner
 ED: https://patrickkettner.github.io/quostibel/host-permissions.html
-Abstract: Draft of the host permissions section (including Cross-origin fetch and activeTab) for the WebExtensions specification, validated against Chromium, WebKit and Gecko source.
+Abstract: This specification defines host permissions, the access they grant to URLs, their effect on cross-origin fetch, and the `activeTab` permission.
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
 </pre>
@@ -57,7 +56,7 @@ Chromium, Gecko, and WebKit source.
 
 An extension never has [=access to a URL=] whose [=scheme=] is not one of
 the schemes valid for [=match patterns=], regardless of any granted host
-permission, including `&lt;all_urls&gt;`.
+permission, including `<all_urls>`.
 
 Implementations additionally restrict specific hosts and schemes beyond
 what [=match pattern=] parsing alone would allow, independently of
@@ -72,27 +71,30 @@ whether a granted [=match pattern=] would otherwise match:
     off-limits, for example to protect account-management or
     extension-store login flows.
 
-Issue: The three engines implement this list very differently and none
-of them specify it declaratively; the group needs to decide whether this
-spec normatively lists restricted hosts/schemes (and if so, whose list),
-or leaves it implementation-defined. What's known from source:
+<div class=issue>
+The three engines implement this list very differently and none of them
+specify it declaratively. What's known from source:
 
-- Chromium unconditionally refuses to script the Chrome Web Store
+* Chromium unconditionally refuses to script the Chrome Web Store
     (`chrome.google.com/webstore`, `chromewebstore.google.com`), refuses
     `chrome://` pages unless a command-line flag is set (and even then,
     MV3 extensions get no `chrome://` access at all; MV2 extensions may
     get `chrome://favicon` only), and refuses other extensions'
     `chrome-extension://` pages unless a flag is set.
-- Gecko refuses a configurable list of domains
+* Gecko refuses a configurable list of domains
     (`extensions.webextensions.restrictedDomains`, defaulting to AMO and
     Mozilla account domains) and a separately configurable
     "quarantined domains" list that privileged extensions can be
     exempted from.
-- WebKit's engine-level source defines no gallery/store restriction list
+* WebKit's engine-level source defines no gallery/store restriction list
     at all; Safari Web Extensions are distributed through the App Store
     review process rather than a web-reachable gallery, so there may be
-    nothing analogous to protect at this layer. This is an absence
-    finding, not a confirmed guarantee for all WebKit-based browsers.
+    nothing analogous to protect at this layer.
+
+The group needs to decide whether this spec normatively lists restricted
+hosts/schemes (and if so, whose list), or leaves it
+implementation-defined.
+</div>
 
 ## Granting host permissions ## {#granting-host-permissions}
 
@@ -103,18 +105,19 @@ pattern=] listed in [`optional_host_permissions`](https://w3c.github.io/webexten
 and is not part of the extension's [=granted host permissions=] until
 granted as described in this section.
 
-Issue: Implementations disagree on whether a required host permission is
-part of the extension's [=granted host permissions=] as soon as the
-extension is installed:
+<div class=issue>
+Implementations disagree on whether a required host permission is part
+of the extension's [=granted host permissions=] as soon as the extension
+is installed:
 
-- Chromium and Gecko grant required host permissions automatically at
+* Chromium and Gecko grant required host permissions automatically at
     install time. Both then let the user subsequently withhold a
     granted host permission from a specific site through browser UI
     (Chromium: "runtime host permissions" / site access controls; Gecko:
     "origin controls"), at which point the extension's effective access
     to that site reverts to a runtime-request flow even though the
     permission is still listed as required in the manifest.
-- WebKit's engine performs no automatic grant at all, for either
+* WebKit's engine performs no automatic grant at all, for either
     required or optional host permissions. The embedding application is
     responsible for presenting required permissions to the user (for
     example at install or update) and recording the result; nothing in
@@ -124,6 +127,7 @@ extension is installed:
 The group should decide whether this specification requires required
 host permissions to be granted automatically, requires user consent
 before every use, or leaves the choice to the implementation (as today).
+</div>
 
 To <dfn>request</dfn> a set of host permissions, an extension calls
 [=permissions.request()=] with those [=match patterns=] in `origins`.
@@ -163,33 +167,34 @@ made by the page the content script is running within: same-origin
 requests succeed as normal, and cross-origin requests succeed only if the
 target server's response grants access under [[FETCH#http-cors-protocol]].
 A granted host permission does not change this outcome, even
-`&lt;all_urls&gt;`.
+`<all_urls>`.
 
-Issue: All three engines converge on the content-script rule above as of
-their current MV3 behavior, but they arrived there differently, and one
-engine's manifest-version handling is unconfirmed from source:
+<div class=issue>
+All three engines converge on the content-script rule above as of their
+current MV3 behavior, but they arrived there differently, and one
+engine's manifest-version handling is unconfirmed:
 
-- Chromium removed cross-origin content script fetches as a platform
+* Chromium removed cross-origin content script fetches as a platform
     change (Chrome 73 CORB, Chrome 85 CORS enforcement, allowlist fully
     removed in Chrome 87), independent of manifest version; MV2 and MV3
     extensions in current Chromium both get page-origin-only fetch from
     content scripts.
-- Gecko gates this explicitly on manifest version: an MV2 content
+* Gecko gates this explicitly on manifest version: an MV2 content
     script's `fetch`/`XMLHttpRequest`/`WebSocket` run with a principal
     that includes the extension's own principal (bypassing CORS via host
     permissions, per Gecko's own source comments), while an MV3 content
     script gets no such override and inherits the page's own `fetch`/XHR.
-- WebKit wires its CORS bypass configuration only into extension-page
-    web views, never into the content-script world, in the source read
-    for this draft; no MV2-specific content-script fetch override was
-    found. Whether WebKit ever offered content scripts a cross-origin
-    fetch bypass (for either manifest version) could not be confirmed or
-    ruled out from source in this pass.
+* WebKit wires its CORS bypass configuration only into extension-page
+    web views, never into the content-script world; no MV2-specific
+    content-script fetch override is present. Whether WebKit ever offered
+    content scripts a cross-origin fetch bypass, for either manifest
+    version, is unconfirmed.
 
-  The group should confirm WebKit's historical (MV2) behavior before
-  writing this section's MV2 case normatively, and decide whether this
-  specification describes MV2 content-script fetch behavior at all, given
-  it is a legacy, converged-away-from state in the other two engines.
+The group should confirm WebKit's historical (MV2) behavior before this
+specification states the MV2 case normatively, and decide whether this
+specification describes MV2 content-script fetch behavior at all, given
+it is a legacy, converged-away-from state in the other two engines.
+</div>
 
 <div class="example">
 An extension with `"host_permissions": ["https://api.example.com/*"]` can
@@ -231,28 +236,30 @@ is required after such a navigation. It does not grant access to any
 other tab, and it does not add anything to the extension's [=granted host
 permissions=] as observed by `permissions.getAll()`.
 
-Issue: The three engines agree on what `activeTab` grants and on which
-user gestures trigger it (toolbar action, keyboard command, context menu
+<div class=issue>
+The three engines agree on what `activeTab` grants and on which user
+gestures trigger it (toolbar action, keyboard command, context menu
 item; the omnibox/address bar in Chromium and Gecko), but disagree on
 exactly when the temporary grant is revoked:
 
-- Chromium revokes it when the tab's main frame completes a committed,
+* Chromium revokes it when the tab's main frame completes a committed,
     cross-origin navigation (same-origin navigations, and any subframe
     navigation, leave it intact).
-- WebKit revokes it when the tab's main frame commits a URL no longer
+* WebKit revokes it when the tab's main frame commits a URL no longer
     matched by the granted pattern, which is close to Chromium's rule in
     practice.
-- Gecko does not revoke it on navigation at all: source comments state
+* Gecko does not revoke it on navigation at all: source comments state
     this is a deliberate difference from Chromium, and the grant instead
     tracks the surviving lifetime of the tab's inner window (including
     back/forward-cache revival), being cleared only when the extension's
     action is invoked again for a different tab or the tab/window is
     destroyed.
 
-  The group should decide the revocation rule this specification
-  requires; "cross-origin navigation of the top-level document" (the
-  Chromium/WebKit behavior) is the more restrictive and privacy-
-  preserving option of the two, but is not what Gecko ships today.
+The group should decide the revocation rule this specification requires;
+"cross-origin navigation of the top-level document" (the Chromium/WebKit
+behavior) is the more restrictive and privacy-preserving option of the
+two, but is not what Gecko ships today.
+</div>
 
 <div class="example">
 ```json

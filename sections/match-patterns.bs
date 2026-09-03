@@ -2,11 +2,10 @@
 Title: Match patterns
 Shortname: quostibel-match-patterns
 Level: 1
-Status: w3c/CG-DRAFT
-Group: WECG
-Editor: WECG
+Status: DREAM
+Editor: Patrick Kettner
 ED: https://patrickkettner.github.io/quostibel/match-patterns.html
-Abstract: Draft of the match patterns section for the WebExtensions specification, validated against Chromium, WebKit and Gecko source.
+Abstract: This specification defines match patterns, the syntax an extension uses to designate a set of URLs, and the algorithm for determining whether a URL matches one.
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
 Ignored Terms: glob
@@ -18,6 +17,10 @@ Ignored Terms: glob
 spec:url; type:dfn; text:scheme
 spec:url; type:dfn; for:url; text:host
 spec:url; type:dfn; text:path
+spec:url; type:dfn; text:query
+spec:url; type:dfn; text:fragment
+spec:url; type:dfn; text:URL record
+spec:html; type:dfn; text:opaque origin
 spec:infra; type:dfn; text:user agent
 </pre>
 
@@ -25,17 +28,12 @@ spec:infra; type:dfn; text:user agent
 
 A <dfn>match pattern</dfn> is a [=string=] used to match URLs.
 
-A match pattern is either the special value `&lt;all_urls&gt;`, or a string of the
+A match pattern is either the special value `<all_urls>`, or a string of the
 form:
 
 ```
-&lt;scheme&gt;://&lt;host&gt;&lt;path&gt;
+<scheme>://<host><path>
 ```
-
-Issue: This section documents the grammar and matching algorithm as
-implemented by Chromium, Gecko, and WebKit today. Where the engines
-disagree, the disagreement is called out in an `Issue:` rather than
-resolved, since resolving it is a normative decision for the group.
 
 ## Grammar ## {#match-pattern-grammar}
 
@@ -52,17 +50,20 @@ their own extension scheme, as literal |scheme| values in `matches` /
 Chromium additionally accepts `ws`/`wss` for `host_permissions` (but not
 for `content_scripts.matches`) and its own `chrome://` WebUI scheme
 (policy/enterprise contexts only). WebKit accepts none of `ws`, `wss`,
-`data`, or a WebUI-equivalent scheme in a match pattern at all. The group
-needs to decide the portable literal-scheme set, if any, versus treating
-each additional scheme as engine-specific.
+`data`, or a WebUI-equivalent scheme in a match pattern at all.
 
 If |scheme| is `*`, the pattern matches a fixed, engine-defined set of
 schemes in place of a literal scheme.
 
-Issue: The `*` scheme wildcard does not expand to the same set of schemes
-in every engine. Chromium and WebKit expand it to `http` and `https`
-only. Gecko expands it to `http`, `https`, `ws`, and `wss`. The group
-needs to pick one expansion.
+<div class=issue>
+The `*` scheme wildcard does not expand to the same set of schemes in every
+engine:
+
+* Chromium: `http`, `https`
+* WebKit: `http`, `https`
+* Gecko: `http`, `https`, `ws`, `wss`
+
+</div>
 
 ### Host ### {#match-pattern-host}
 
@@ -78,7 +79,7 @@ A `*` may not appear anywhere else in |host|; a pattern containing one is
 invalid.
 
 When |scheme| is `file`, |host| is omitted (the pattern has the form
-`file://&lt;path&gt;` or `file:///&lt;path&gt;`, with `&lt;path&gt;` beginning at the third
+`file://<path>` or `file:///<path>`, with `<path>` beginning at the third
 slash regardless of what, if anything, appears between the second and
 third slash).
 
@@ -90,38 +91,40 @@ case explicitly when comparing hosts. Chromium's comparison is a plain
 byte comparison, but both the pattern's host and the URL's host are
 independently canonicalized to lowercase before the comparison runs, so
 it is case-insensitive as a side effect of canonicalization rather than
-by an explicit fold in the comparison itself. No case-folding call was
-found in Gecko's host comparison; an intentionally-uppercase literal host
-in a Gecko match pattern therefore does not match a real (lowercase) URL
-host. If the group specifies case-insensitive host matching normatively,
-this is (as far as could be determined from source) a required behavior
-change for Gecko, not merely a documentation fix.
+by an explicit fold in the comparison itself. Gecko's host comparison has
+no case-folding call; an intentionally-uppercase literal host in a Gecko
+match pattern therefore does not match a real (lowercase) URL host. If
+the group specifies case-insensitive host matching normatively, this is
+a required behavior change for Gecko, not merely a documentation fix.
 
 Issue: Only Chromium canonicalizes a Unicode (non-ASCII) |host| to
-Punycode/ASCII-Compatible-Encoding at parse time. Neither Gecko nor
-WebKit were found to do this. A match pattern host written with literal
-Unicode characters will therefore fail to match the corresponding
-navigated URL (whose host a user agent always Punycode-encodes) in Gecko
-and WebKit, unless the extension author writes the Punycode form
-themselves. The group should decide whether pattern hosts are required
-to be pre-encoded ASCII, or whether Unicode host canonicalization is
-required of every engine.
+Punycode/ASCII-Compatible-Encoding at parse time. Gecko and WebKit do
+not. A match pattern host written with literal Unicode characters will
+therefore fail to match the corresponding navigated URL (whose host a
+user agent always Punycode-encodes) in Gecko and WebKit, unless the
+extension author writes the Punycode form themselves.
 
 A port is never written in |host|.
 
-Issue: The three engines disagree sharply on what happens if an author
-writes one anyway (e.g. `http://example.com:8080/*`). Chromium accepts a
-`&lt;host&gt;:&lt;port&gt;` form as a distinct, real grammar component: the pattern
-then matches only URLs on that exact port, and omitting the port (the
-common case) matches any port. Gecko has no port grammar at all: the
-`:8080` text is silently absorbed into the literal host string, which
-then can never match any real (portless) host, so the pattern becomes
-permanently unmatchable without any parse error. WebKit explicitly
-rejects any pattern containing port syntax in the host as invalid at
-parse time. The group needs to decide whether match patterns support a
-port component at all and, if not, whether writing one should be a
-parse error (WebKit's behavior) or ignored, rather than silently
-unmatchable (current Gecko behavior).
+<div class=issue>
+The three engines disagree sharply on what happens if an author writes
+one anyway (e.g. `http://example.com:8080/*`):
+
+* Chromium accepts a `<host>:<port>` form as a distinct, real grammar
+    component: the pattern then matches only URLs on that exact port, and
+    omitting the port (the common case) matches any port.
+* Gecko has no port grammar at all: the `:8080` text is silently absorbed
+    into the literal host string, which then can never match any real
+    (portless) host, so the pattern becomes permanently unmatchable
+    without any parse error.
+* WebKit explicitly rejects any pattern containing port syntax in the
+    host as invalid at parse time.
+
+The group needs to decide whether match patterns support a port
+component at all and, if not, whether writing one should be a parse
+error (WebKit's behavior) or ignored, rather than silently unmatchable
+(current Gecko behavior).
+</div>
 
 <div class="example">
 `https://*.example.com/*` matches `https://example.com/`,
@@ -139,25 +142,16 @@ more characters. No other character in |path| has special meaning; in
 particular, unlike a [=glob=], `?` is an ordinary literal character in a
 match pattern's |path|, not a single-character wildcard.
 
-Path matching is case-sensitive.
-
-Issue: The current text of this section previously stated that match
-patterns "are case-insensitive" as a blanket claim. That is not accurate
-for the path component in any of the three engines: Chromium, Gecko, and
-WebKit all compare |path| case-sensitively in their production code
-paths (Chromium exposes a case-insensitive matching mode in its API, but
-no call site in the browser's own permission or content-script matching
-code uses it).
+Path matching is case-sensitive in all three engines (Chromium exposes a
+case-insensitive matching mode in its API, but no call site in the
+browser's own permission or content-script matching code uses it).
 
 Issue: Whether the query string is included in what |path| matches
 against differs. Chromium and Gecko both match |path| against the URL's
-path plus its query string (with the fragment excluded either way).
+[=path=] plus its [=url/query=] (with the [=url/fragment=] excluded either way).
 WebKit's source only reads the URL's path accessor, not its query
-accessor, when matching, meaning a WebKit match pattern's |path| appears
-to be compared against the path alone. This was not confirmed against
-WebKit by an executed test with a literal (unescaped) query separator,
-only inferred from which accessor the matching code calls, so the group
-should verify this directly against a build before relying on it.
+accessor, when matching, so a WebKit match pattern's |path| appears to be
+compared against the path alone. WebKit's behavior here is unconfirmed.
 
 Issue: Percent-encoding is handled inconsistently. Chromium decodes
 percent-encoded octets in both the URL and the pattern's |path| before
@@ -165,7 +159,7 @@ comparing (falling back to a raw comparison for byte sequences that
 aren't valid UTF-8). WebKit performs no decoding at all: a pattern
 containing a literal, unescaped reserved character will not match a URL
 where the user agent encoded that same character. Whether Gecko decodes
-was not determined from `MatchPattern.cpp` alone.
+is unconfirmed.
 
 <div class="example">
 `https://example.com/foo/*` matches `https://example.com/foo/`,
@@ -174,51 +168,58 @@ but not `https://example.com/foobar` or `https://example.com/foo`
 (without a trailing slash).
 </div>
 
-## <dfn export>`&lt;all_urls&gt;`</dfn> ## {#all-urls}
+## <dfn export>`<all_urls>`</dfn> ## {#all-urls}
 
-The special match pattern `&lt;all_urls&gt;` matches all URLs whose scheme is
+The special match pattern `<all_urls>` matches all URLs whose scheme is
 in a permitted set of schemes, regardless of host or path.
 
-Issue: The permitted scheme set for `&lt;all_urls&gt;` is the largest
-three-way divergence found in this area, and it is not merely a
-different literal list; the *shape* of the set differs.
+<div class=issue>
+The permitted scheme set for `<all_urls>` is the largest three-way
+divergence in this area, and it is not merely a different literal list;
+the *shape* of the set differs.
 
 * Chromium's set depends on which manifest surface is asking. For
-    `content_scripts.matches`, `&lt;all_urls&gt;` covers `http`, `https`,
+    `content_scripts.matches`, `<all_urls>` covers `http`, `https`,
     `file`, `ftp`, and the isolated-web-app UUID scheme (plus `chrome://`
     WebUI pages, gated behind an experimental flag). For
     `host_permissions`, the set additionally includes `ws` and `wss`.
     Neither surface includes `data:` or the extension's own scheme.
 * Gecko uses one fixed set for every surface: `http`, `https`, `ws`,
     `wss`, `file`, `ftp`, and `data`. This is the only one of the three
-    engines that includes `data:` in `&lt;all_urls&gt;`.
+    engines that includes `data:` in `<all_urls>`.
 * WebKit's set is the narrowest by far: `http`, `https`, and the
     extension's own scheme. `file:` is matched only if the caller has
     separately opted in to allowing file access; by default it is
     excluded. `ftp`, `ws`, `wss`, and `data` are never included.
 
-The group needs to choose a portable `&lt;all_urls&gt;` scheme set (or
+The group needs to choose a portable `<all_urls>` scheme set (or
 explicitly leave `file:` and other non-http(s) schemes as an
 engine-specific opt-in, matching WebKit's model, rather than an
 unconditional inclusion as in Gecko's model).
+</div>
 
 <div class="example">
-Given a `content_scripts.matches` list of `["&lt;all_urls&gt;"]`: a content
-script runs on `https://example.com/` in all three engines; runs on
-`ftp://example.com/` in Chromium and Gecko but not WebKit; runs on
-`data:text/html,...` in Gecko only; and runs on `file:///home/user/x.html`
-in Chromium and Gecko, but only in WebKit if file access has separately
-been granted.
+Given a `content_scripts.matches` list of `["<all_urls>"]`:
+
+<table class=simple>
+<thead>
+<tr><th>URL<th>Chromium<th>Gecko<th>WebKit
+<tbody>
+<tr><td>`https://example.com/`<td>runs<td>runs<td>runs
+<tr><td>`ftp://example.com/`<td>runs<td>runs<td>does not run
+<tr><td>`data:text/html,...`<td>does not run<td>runs<td>does not run
+<tr><td>`file:///home/user/x.html`<td>runs<td>runs<td>runs only if file access has separately been granted
+</table>
 </div>
 
 ## Matching algorithm ## {#match-pattern-matching-algorithm}
 
 To determine whether a [=match pattern=] |pattern| matches a URL |url|:
 
-1. Let |url record| be the result of parsing |url|.
-1. If |pattern| is `&lt;all_urls&gt;`:
+1. Let |url record| be the result of [=basic URL parser|parsing=] |url|.
+1. If |pattern| is `<all_urls>`:
     1. If the [=scheme=] of |url record| is in the permitted scheme set
-        for `&lt;all_urls&gt;` (see above), return true.
+        for `<all_urls>` (see above), return true.
     1. Otherwise, return false.
 1. If the [=scheme=] of |url record| does not match |pattern|'s |scheme|
     component (a literal scheme must be equal; `*` must be one of the
@@ -233,22 +234,32 @@ To determine whether a [=match pattern=] |pattern| matches a URL |url|:
 This algorithm is run against the URL produced by
 [Determine the URL for matching a document](https://w3c.github.io/webextensions/specification/#determine-the-url-for-matching-a-document) when matching a document
 for `content_scripts`, not necessarily against the document's literal
-URL; it does not itself define how an opaque-origin document's URL is
-resolved.
+URL; it does not itself define how the URL of a document with an
+[=opaque origin=] is resolved.
 
-Issue: Gecko additionally supports a stricter "explicit" matching mode
-(used for `host_permissions`-style checks as opposed to
-`content_scripts.matches`-style checks) in which a pattern that matches
-subdomains (a leading `*.` or bare `*` host) never matches, regardless of
-the URL. No equivalent mode was found in Chromium's or WebKit's
-match-pattern matching code itself. The group should decide whether this
-"explicit host" restriction belongs in this section as a named concept,
-or is purely a permission-UI concern out of scope for match pattern
-matching itself.
+<div class=issue>
+Gecko additionally supports a stricter "explicit" matching mode (used for
+`host_permissions`-style checks as opposed to `content_scripts.matches`-
+style checks) in which a pattern that matches subdomains (a leading `*.`
+or bare `*` host) never matches, regardless of the URL. Chromium's and
+WebKit's match-pattern matching code has no equivalent mode.
+
+The group should decide whether this "explicit host" restriction belongs
+in this section as a named concept, or is purely a permission-UI concern
+out of scope for match pattern matching itself.
+</div>
 
 <div class="example">
-`*://*.example.com/*` matches `https://www.example.com/`,
-`http://example.com/`, and `wss://example.com/` in Gecko, but only the
-first two in Chromium and WebKit, since Gecko's `*` scheme wildcard
-additionally covers `ws`/`wss`.
+Given the pattern `*://*.example.com/*`:
+
+<table class=simple>
+<thead>
+<tr><th>URL<th>Chromium<th>Gecko<th>WebKit
+<tbody>
+<tr><td>`https://www.example.com/`<td>matches<td>matches<td>matches
+<tr><td>`http://example.com/`<td>matches<td>matches<td>matches
+<tr><td>`wss://example.com/`<td>does not match<td>matches<td>does not match
+</table>
+
+Gecko's `*` scheme wildcard additionally covers `ws`/`wss`.
 </div>

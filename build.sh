@@ -44,6 +44,11 @@ else
   exit 1
 fi
 
+echo "== REGRESSION CHECKS =="
+echo "-- Issue: shorthand leaking into normative text --"
+python3 "$TOOLS/check_issue_leaks.py" "$SECTIONS"
+echo
+
 rm -rf "$OUT"
 mkdir -p "$OUT/standalone" "$OUT/merged"
 
@@ -110,10 +115,22 @@ if ! python3 "$TOOLS/classify.py" "$OUT/merged/messages.json"; then
 fi
 
 echo
+echo "== REGRESSION CHECKS (post-build) =="
+echo "-- double-escaped angle brackets (amp;lt;) in generated HTML --"
+escaping_failures=0
+if grep -rn "amp;lt;" "$OUT" --include='*.html'; then
+  escaping_failures=1
+fi
+if [ "$escaping_failures" -eq 0 ]; then
+  echo "  clean."
+fi
+
+echo
 echo "== SUMMARY =="
 echo "standalone failures: $standalone_failures / 6"
 echo "merged: $([ "$merged_pass" = true ] && echo PASS || echo FAIL)"
+echo "double-escaping regressions: $([ "$escaping_failures" -eq 0 ] && echo none || echo FOUND)"
 
-if [ "$standalone_failures" -ne 0 ] || [ "$merged_pass" != true ]; then
+if [ "$standalone_failures" -ne 0 ] || [ "$merged_pass" != true ] || [ "$escaping_failures" -ne 0 ]; then
   exit 1
 fi

@@ -2,11 +2,10 @@
 Title: Globs
 Shortname: quostibel-globs
 Level: 1
-Status: w3c/CG-DRAFT
-Group: WECG
-Editor: WECG
+Status: DREAM
+Editor: Patrick Kettner
 ED: https://patrickkettner.github.io/quostibel/globs.html
-Abstract: Draft of the globs section (include_globs/exclude_globs) for the WebExtensions specification, validated against Chromium, WebKit and Gecko source.
+Abstract: This specification defines globs, the wildcard syntax used by the `include_globs` and `exclude_globs` content script keys, and the algorithm for matching a URL against one.
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
 </pre>
@@ -17,20 +16,41 @@ Markup Shorthands: markdown yes
 spec:url; type:dfn; text:scheme
 spec:url; type:dfn; for:url; text:host
 spec:url; type:dfn; text:path
+spec:url; type:dfn; text:fragment
+spec:infra; type:dfn; text:list
 spec:infra; type:dfn; text:user agent
 </pre>
 
 # Globs # {#globs}
 
-A <dfn>glob</dfn> can be any [=string=]. It can contain any number of wildcards: `*` matches zero or more characters, and `?` matches one character.
+A <dfn>glob</dfn> is a [=string=] matched against a URL. `*` matches zero
+or more characters. Every other character matches only itself, so a glob
+containing no wildcards matches only a URL identical to it.
 
 Glob matching is case-sensitive.
 
-Issue: The engines disagree on `?`. Chromium's `base::MatchPattern` (`base/strings/pattern.cc`, `base/strings/pattern.h:16-18`) treats a run of *k* consecutive `?` as matching **0 to k** characters, so a lone `?` matches zero or one character (`MatchPattern("", "?")` is true, `base/strings/pattern_unittest.cc:22`). Gecko's `MatchGlobCore` (`toolkit/components/extensions/MatchPattern.cpp:786-790`) compiles `?` to the regex `.`, which requires **exactly one** character. WebKit does not implement `include_globs`/`exclude_globs` matching at all (see below), so it has no `?` semantics to compare.
+<div class=issue>
+Each engine handles `?` differently. Chromium treats a run of *k*
+consecutive `?` as matching 0 to *k* characters, so a lone `?` matches
+zero or one character. Gecko compiles `?` to the regex `.`, which
+requires exactly one character. WebKit does not implement glob matching
+at all, so it has no `?` semantics to compare.
+</div>
 
-Issue: The engines disagree on escaping. Chromium's `base::MatchPattern` treats `\` as an escape character for the next `*` or `?` (`base/strings/pattern.cc:47-53`, `base/strings/pattern_unittest.cc:19`). Gecko has no escape syntax: a `\` in a glob is matched as a literal backslash, and there is no way to write a literal `*` or `?` (`toolkit/components/extensions/MatchPattern.cpp:767-796`). WebKit does not implement glob matching.
+<div class=issue>
+Each engine handles escaping differently. Chromium treats `\` as an
+escape character for the next `*` or `?`. Gecko has no escape syntax: a
+`\` in a glob is matched as a literal backslash, and there is no way to
+write a literal `*` or `?`. WebKit does not implement glob matching.
+</div>
 
-Issue: The engines disagree on what string is matched. Chromium matches a glob against the full URL spec, including the fragment (`extensions/common/user_script.cc:37`, `url.spec()`). Gecko matches against the full URL spec with the fragment stripped (`toolkit/components/extensions/MatchPattern.cpp:161-181`, `URLInfo::CSpec()` calls `URINoRef()`). A glob ending in a fragment, such as `*#top`, can therefore match in Chromium but never in Gecko.
+<div class=issue>
+Each engine matches a glob against a different string. Chromium matches
+a glob against the full URL, including the [=url/fragment=]. Gecko matches
+against the full URL with the [=url/fragment=] stripped. A glob ending in a
+fragment, such as `*#top`, can therefore match in Chromium but never in
+Gecko.
+</div>
 
 <div class="example">
 Given the URL `https://example.com/path?query#frag`:
@@ -42,12 +62,17 @@ Given the URL `https://example.com/path?query#frag`:
 
 ## Key `include_globs` ## {#globs-key-include_globs}
 
-A [=list=] of [=globs=] that a document should match. A document matches if the URL matches both the [`matches`](https://w3c.github.io/webextensions/specification/#key-content_scripts-matches) field and the `include_globs` field. If `include_globs` is empty or not present, it does not restrict matching.
+A <a data-link-type="dfn" data-link-spec="infra">list</a> of [=globs=] that a document should match. A document matches if the URL matches both the [`matches`](https://w3c.github.io/webextensions/specification/#key-content_scripts-matches) field and the `include_globs` field. If `include_globs` is empty or not present, it does not restrict matching.
 
-Issue: WebKit does not implement `include_globs`. The manifest key is parsed and stored (`Source/WebKit/UIProcess/Extensions/WebExtension.cpp:1481-1489`), but the actual injection-matching functions never consult it and carry an explicit acknowledgment that it is missing: `// FIXME: &lt;https://webkit.org/b/246492&gt; Add support for include globs.` (`Source/WebKit/UIProcess/Extensions/WebExtension.cpp:1341`, `Source/WebKit/UIProcess/Extensions/WebExtensionContext.cpp:1202`). A content script that declares `include_globs` to narrow a broad `matches` pattern will inject on the full, unnarrowed `matches` set in WebKit-based browsers.
+Issue: WebKit does not implement `include_globs`. The manifest key is
+parsed and stored, but the actual injection-matching functions never
+consult it. A content script that declares `include_globs` to narrow a
+broad `matches` pattern will inject on the full, unnarrowed `matches` set
+in WebKit-based browsers.
 
 ## Key `exclude_globs` ## {#globs-key-exclude_globs}
 
-A [=list=] of [=globs=] that can be used to specify URLs where the content script should not run, even if the URL matches entries in [`matches`](https://w3c.github.io/webextensions/specification/#key-content_scripts-matches) and (if specified) [[#globs-key-include_globs]]. If `exclude_globs` is empty or not present, it does not exclude anything.
+A <a data-link-type="dfn" data-link-spec="infra">list</a> of [=globs=] that can be used to specify URLs where the content script should not run, even if the URL matches entries in [`matches`](https://w3c.github.io/webextensions/specification/#key-content_scripts-matches) and (if specified) [[#globs-key-include_globs]]. If `exclude_globs` is empty or not present, it does not exclude anything.
 
-Issue: WebKit does not implement `exclude_globs`, for the same reason as `include_globs` above (same two FIXME sites, `WebExtension.cpp:1329` and `WebExtensionContext.cpp:1190`).
+Issue: WebKit does not implement `exclude_globs`, for the same reason as
+`include_globs` above.

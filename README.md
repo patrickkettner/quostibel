@@ -12,7 +12,7 @@ Chromium, WebKit and Gecko source, not by reading documentation or a vendored
 type package. Every claim in every section carries a file:line citation into
 one of the three engines, in the matching file under `evidence/`.
 
-## Two Corrections
+## Three Corrections
 
 These are the headline result, because they are errors in text already
 published in the live `index.bs` today, not just gaps in it.
@@ -30,6 +30,12 @@ states plainly that `?` matches 0 or 1 character, and
 `EXPECT_TRUE(MatchPattern("", "?"))` in `pattern_unittest.cc` confirms it.
 WebKit has no `?` semantics to compare, because it doesn't implement
 `include_globs`/`exclude_globs` matching at all.
+
+**"A glob can be any string" defines the syntax, not the behavior.** The
+spec's current definition describes what a glob is allowed to look like,
+which leaves open what a glob without any wildcard characters actually
+does when matched. It matches only a URL identical to it; the definition
+needs to say so.
 
 ## Status
 

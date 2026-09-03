@@ -2,11 +2,10 @@
 Title: Version number handling
 Shortname: quostibel-version-number-handling
 Level: 1
-Status: w3c/CG-DRAFT
-Group: WECG
-Editor: WECG
+Status: DREAM
+Editor: Patrick Kettner
 ED: https://patrickkettner.github.io/quostibel/version-number-handling.html
-Abstract: Draft of the version and version_name manifest keys and version-comparison algorithm for the WebExtensions specification, validated against Chromium, WebKit and Gecko source.
+Abstract: This specification defines the `version` and `version_name` manifest keys, the grammar of a version string, and the algorithm for comparing two version strings.
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
 </pre>
@@ -17,6 +16,7 @@ Markup Shorthands: markdown yes
 spec:url; type:dfn; text:scheme
 spec:url; type:dfn; for:url; text:host
 spec:url; type:dfn; text:path
+spec:infra; type:dfn; text:list
 spec:infra; type:dfn; text:user agent
 </pre>
 
@@ -24,18 +24,23 @@ spec:infra; type:dfn; text:user agent
 
 The value must be a non-empty [=string=].
 
-Issue: Engines disagree sharply on the accepted grammar. Chromium accepts 1
-to 4 dot-separated components, each a decimal integer with no leading zero
-in the first component (a leading zero in a later component is tolerated
+<div class=issue>
+Engines disagree sharply on the accepted grammar. Chromium accepts 1 to 4
+dot-separated components, each a decimal integer with no leading zero in
+the first component (a leading zero in a later component is tolerated
 and silently canonicalized with a developer-facing warning); a version
-outside this shape fails to load. Gecko accepts any string: a "recommended"
-grammar (at most 4 parts, each `0` or `[1-9][0-9]{0,8}`) is documented and a
-mismatch produces a warning, but the value is used as-is regardless, and
-Gecko's own comparator treats non-numeric parts as meaningful rather than
-invalid. WebKit imposes no grammar at all; only emptiness is checked, and
-even that does not appear to block the extension from loading. This
-specification needs to pick one behavior, or explicitly scope `version` to
-the intersection grammar that all three already accept without a warning.
+outside this shape fails to load. Gecko accepts any string: a
+"recommended" grammar (at most 4 parts, each `0` or `[1-9][0-9]{0,8}`) is
+documented and a mismatch produces a warning, but the value is used
+as-is regardless, and Gecko's own comparator treats non-numeric parts as
+meaningful rather than invalid. WebKit imposes no grammar at all; only
+emptiness is checked, and even that does not block the extension from
+loading at the engine level.
+
+This specification needs to pick one behavior, or explicitly scope
+`version` to the intersection grammar that all three already accept
+without a warning.
+</div>
 
 ## Key `version_name` ## {#version-handling-key-version_name}
 
@@ -44,11 +49,11 @@ An optional [=string=] providing a version to show to users in place of
 as "1.2 beta". It has no effect on [=extension version comparison=] and is
 not required to follow the [=version string=] grammar.
 
-Issue: Not implemented in Gecko. Gecko's `management.json` API schema
-documents an optional `versionName` output field, but no code path reads a
-manifest `version_name` key or ever populates that field, so it is
-currently vestigial there. Chromium and WebKit both support it as display
-text that falls back to `version` when absent or empty.
+Issue: Not implemented in Gecko. The `management` API schema documents an
+optional `versionName` output field, but no code path reads a manifest
+`version_name` key or ever populates that field, so it is currently
+vestigial there. Chromium and WebKit both support it as display text
+that falls back to `version` when absent or empty.
 
 # Version number handling # {#version-number-handling}
 
@@ -61,7 +66,7 @@ To <dfn>parse a version string</dfn> given |input|:
 
 1. Let |parts| be the result of [=strictly split=]ting |input| on U+002E (.).
 1. If |parts|'s [=list/size=] is 0, return failure.
-1. Let |components| be an empty [=list=].
+1. Let |components| be an empty <a data-link-type="dfn" data-link-spec="infra">list</a>.
 1. For each |part| of |parts|:
     1. If |part| does not consist entirely of ASCII digits, return failure.
     1. If |part|'s [=string/length=] is greater than 1 and |part|'s first
@@ -125,45 +130,51 @@ The two engines disagree about which of `"4294967295.0"` and `"1.0"` is
 newer, for two version strings that both engines accept without error.
 </div>
 
-Issue: The algorithm above is Chromium's plain numeric tuple compare, given
-as a normative starting point because it is the simplest of the three. It
-is not what Gecko or WebKit do. Gecko's comparator
-(`nsIVersionComparator`) decomposes each dot-separated part into
-`&lt;number&gt;&lt;string&gt;&lt;number&gt;&lt;string&gt;` and compares the string segments
-byte-wise, treats a `+` suffix specially (incrementing the preceding number
-and normalizing to "pre"), treats a bare `*` part as infinity, and silently
-maps any out-of-range or unparseable numeric segment to 0 rather than
-erroring. This makes Gecko's ordering observably different from a numeric
-tuple compare for the same input, as the worked example above shows, and
-also lets Gecko order two version strings that are not comparable at all
-under the algorithm above (for example `"1.0a1"` vs `"1.0b1"`). WebKit does
-not implement version comparison anywhere in the engine at all: `version`
-is stored and returned as an opaque string, and if any comparison for
+<div class=issue>
+The algorithm above is Chromium's plain numeric tuple compare, given as a
+normative starting point because it is the simplest of the three. It is
+not what Gecko or WebKit do. Gecko's comparator decomposes each
+dot-separated part into `<number><string><number><string>`
+and compares the string segments byte-wise, treats a `+` suffix specially
+(incrementing the preceding number and normalizing to "pre"), treats a
+bare `*` part as infinity, and silently maps any out-of-range or
+unparseable numeric segment to 0 rather than erroring. This makes
+Gecko's ordering observably different from a numeric tuple compare for
+the same input, as the worked example above shows, and also lets Gecko
+order two version strings that are not comparable at all under the
+algorithm above (for example `"1.0a1"` vs `"1.0b1"`). WebKit does not
+implement version comparison anywhere in the engine at all: `version` is
+stored and returned as an opaque string, and if any comparison for
 update purposes happens, it happens outside the engine, in the host
-application. This specification needs to decide whether to standardize
-Chromium's numeric-tuple algorithm, Gecko's richer algorithm, both (with
-engines free to choose), or to leave comparison entirely
-implementation-defined and unobservable to extensions.
+application.
+
+This specification needs to decide whether to standardize Chromium's
+numeric-tuple algorithm, Gecko's richer algorithm, both (with engines
+free to choose), or to leave comparison entirely implementation-defined
+and unobservable to extensions.
+</div>
 
 ## Invalid version strings ## {#invalid-version-strings}
 
-Issue: The three engines disagree about what happens when `version` is
-missing, empty, or does not [=parse a version string|parse=]:
+<div class=issue>
+The three engines disagree about what happens when `version` is missing,
+empty, or does not [=parse a version string|parse=]:
 
-- Chromium fails to load the extension entirely, with an install error.
-- Gecko never fails to load the extension for a malformed `version`: any
+* Chromium fails to load the extension entirely, with an install error.
+* Gecko never fails to load the extension for a malformed `version`: any
     non-empty string is accepted and used as-is, with only a developer
-    console warning when it does not match the recommended grammar. Gecko
-    also accepts an empty string for `version`, unlike the other two
-    engines.
-- WebKit records an internal error when `version` is missing or empty, but
-    does not itself refuse to construct or load the extension over it; from
-    the WebKit engine source alone it is undetermined whether the host
-    application (Safari) then blocks installation.
+    console warning when it does not match the recommended grammar.
+    Gecko also accepts an empty string for `version`, unlike the other
+    two engines.
+* WebKit records an internal error when `version` is missing or empty,
+    but does not itself refuse to construct or load the extension over
+    it; whether the host application (Safari) then blocks installation is
+    unknown.
 
 This specification should state whether an extension with an invalid
 `version` must be rejected at load, and if so, at what granularity (the
 whole extension, or just the key).
+</div>
 
 ## Observability to extensions ## {#version-observability}
 
