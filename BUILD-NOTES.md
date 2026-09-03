@@ -205,22 +205,14 @@ rather than markup bugs. Left alone, per the task's rules.
 3. **`[=web accessible resource=]` in extension-ids is never defined
    anywhere.** index.bs has an empty `# Web accessible resources` heading
    but no `<dfn>`. Non-fatal, same reason as #2.
-4. **`dictionary Permissions {...}` and `interface Permissions {...}` share
-   a name in permissions-api's WebIDL block.** Every `{{Permissions}}` in
-   its prose (7 occurrences) resolves to a random one of the two on each
-   bikeshed run ("Multiple possible 'idl' local refs... Randomly chose one
-   of them"). Not fixed because renaming either one is a content/API-shape
-   decision, not a markup fix.
-5. **`[=permissions/request=]`-style for-scoped references don't match
-   permissions-api's actual `for=` value.** Its WebIDL uses `interface
-   Permissions` (capital P) as the `for` context on its method dfns, but
-   host-permissions (`[=permissions.request()=]`) and permissions-api
-   itself (`[=permissions/request=]`, `[=permissions/remove=]`) link as
-   though there's a lowercase `permissions` namespace. Both read as "No
-   'dfn' refs found for 'request'/'remove' with for=['permissions']":
-   non-fatal, but currently dead links. Likely the same underlying question
-   as #4: is this meant to be a WebIDL `namespace permissions` rather than
-   `interface Permissions`? Not decided here.
+
+Resolved since: the WebIDL `interface Permissions` was renamed to lowercase
+`interface permissions` (the dictionary keeps `Permissions`), and the four
+`[=permissions/onAdded=]`-style dfn-autolinks in permissions-api.bs were
+switched to `{{permissions/onAdded}}`-style IDL links, which is the syntax
+that actually resolves a `<dfn method>`/`<dfn attribute>` dfn (a dfn-type
+autolink never matches one, regardless of `for=` casing). Both the
+dictionary/interface name collision and the four dead links are gone.
 
 ## Warnings that remain, and why they're benign
 

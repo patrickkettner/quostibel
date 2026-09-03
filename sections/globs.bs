@@ -23,40 +23,49 @@ spec:infra; type:dfn; text:user agent
 
 # Globs # {#globs}
 
-A <dfn>glob</dfn> is a [=string=] matched against a URL. `*` matches zero
+A <dfn export>glob</dfn> is a [=string=] matched against a URL. `*` matches zero
 or more characters. Every other character matches only itself, so a glob
 containing no wildcards matches only a URL identical to it.
 
 Glob matching is case-sensitive.
 
 <div class=issue>
-Each engine handles `?` differently. Chromium treats a run of *k*
-consecutive `?` as matching 0 to *k* characters, so a lone `?` matches
-zero or one character. Gecko compiles `?` to the regex `.`, which
-requires exactly one character. WebKit does not implement glob matching
-at all, so it has no `?` semantics to compare.
+The published specification states that a single `?` matches exactly one
+character (added by [w3c/webextensions#542](https://github.com/w3c/webextensions/pull/542),
+"Add content scripts section in specification"). That text was written as
+its author's own best understanding at the time, not as a group decision:
+the pull request's body calls the section "a first draft," and its author
+asked reviewers directly, "Would you be able to take a look at this one
+and confirm if it is accurate? This was my best understanding based on
+bugs and documentation in the code." Nobody confirmed it, and no other
+discussion of `?` semantics exists anywhere in the group's record. It does
+not match Chrome: Chrome treats a run of *k* consecutive `?` as matching 0
+to *k* characters, so a lone `?` there can match zero characters, not
+exactly one. Firefox compiles `?` to the regex `.`, which requires exactly
+one character, matching the published text. Safari does not implement
+glob matching at all, so it has no `?` semantics to compare.
 </div>
 
 <div class=issue>
-Each engine handles escaping differently. Chromium treats `\` as an
-escape character for the next `*` or `?`. Gecko has no escape syntax: a
+Each browser handles escaping differently. Chrome treats `\` as an
+escape character for the next `*` or `?`. Firefox has no escape syntax: a
 `\` in a glob is matched as a literal backslash, and there is no way to
-write a literal `*` or `?`. WebKit does not implement glob matching.
+write a literal `*` or `?`. Safari does not implement glob matching.
 </div>
 
 <div class=issue>
-Each engine matches a glob against a different string. Chromium matches
-a glob against the full URL, including the [=url/fragment=]. Gecko matches
+Each browser matches a glob against a different string. Chrome matches
+a glob against the full URL, including the [=url/fragment=]. Firefox matches
 against the full URL with the [=url/fragment=] stripped. A glob ending in a
-fragment, such as `*#top`, can therefore match in Chromium but never in
-Gecko.
+fragment, such as `*#top`, can therefore match in Chrome but never in
+Firefox.
 </div>
 
 <div class="example">
 Given the URL `https://example.com/path?query#frag`:
 
-- `*example.com*` matches in both Chromium and Gecko.
-- `*#frag` matches in Chromium, but not in Gecko, because Gecko matches against the URL with its fragment removed.
+- `*example.com*` matches in both Chrome and Firefox.
+- `*#frag` matches in Chrome, but not in Firefox, because Firefox matches against the URL with its fragment removed.
 
 </div>
 
@@ -64,15 +73,15 @@ Given the URL `https://example.com/path?query#frag`:
 
 A <a data-link-type="dfn" data-link-spec="infra">list</a> of [=globs=] that a document should match. A document matches if the URL matches both the [`matches`](https://w3c.github.io/webextensions/specification/#key-content_scripts-matches) field and the `include_globs` field. If `include_globs` is empty or not present, it does not restrict matching.
 
-Issue: WebKit does not implement `include_globs`. The manifest key is
+Issue: Safari does not implement `include_globs`. The manifest key is
 parsed and stored, but the actual injection-matching functions never
 consult it. A content script that declares `include_globs` to narrow a
 broad `matches` pattern will inject on the full, unnarrowed `matches` set
-in WebKit-based browsers.
+in Safari.
 
 ## Key `exclude_globs` ## {#globs-key-exclude_globs}
 
 A <a data-link-type="dfn" data-link-spec="infra">list</a> of [=globs=] that can be used to specify URLs where the content script should not run, even if the URL matches entries in [`matches`](https://w3c.github.io/webextensions/specification/#key-content_scripts-matches) and (if specified) [[#globs-key-include_globs]]. If `exclude_globs` is empty or not present, it does not exclude anything.
 
-Issue: WebKit does not implement `exclude_globs`, for the same reason as
+Issue: Safari does not implement `exclude_globs`, for the same reason as
 `include_globs` above.

@@ -30,13 +30,37 @@ empty [`optional_permissions`](https://w3c.github.io/webextensions/specification
 [`optional_host_permissions`](https://w3c.github.io/webextensions/specification/#key-optional_host_permissions) sections). Until defined, take them to mean: a
 permission or host pattern that is either listed in `optional_permissions`/`optional_host_permissions`,
 or listed in `permissions`/`host_permissions` and withheld from the extension until requested.
+This relationship is under active WECG discussion, with two competing restructurings still
+unsettled as of 2026-07-02: [w3c/webextensions#798](https://github.com/w3c/webextensions/pull/798)
+and [#883](https://github.com/w3c/webextensions/issues/883).
+
+## Types ## {#permissions-types}
+
+### The `Permissions` dictionary ### {#permissions-dictionary}
+
+A {{Permissions}} dictionary's `permissions` member is a list of named API permission strings,
+excluding host permissions. Its `origins` member is a list of [=match pattern|match patterns=].
+
+Issue: Each browser validates `permissions` strings against its own closed set of recognized
+permission names, and validates `origins` entries using the same [=match pattern=] grammar used
+for the `host_permissions` manifest key. What the shared set of recognized permission names is,
+and how strictly it must be enforced, is not yet specified normatively.
 
 <pre class="idl">
 dictionary Permissions {
   sequence&lt;DOMString&gt; permissions;
   sequence&lt;DOMString&gt; origins;
 };
+</pre>
 
+## Methods ## {#permissions-methods}
+
+Issue: Chrome, Firefox, and Safari additionally accept a callback function as a trailing
+argument on every method here, resolved/invoked instead of returning a promise when supplied.
+This specification defines only the promise form here; see [Promises and callbacks](https://w3c.github.io/webextensions/specification/#promises-and-callbacks) (currently empty)
+for how dual promise/callback signatures are expressed generally.
+
+<pre class="idl">
 [Exposed=WebExtensions]
 interface permissions {
   Promise&lt;Permissions&gt; getAll();
@@ -44,59 +68,31 @@ interface permissions {
   Promise&lt;boolean&gt; request(optional Permissions permissions);
   Promise&lt;boolean&gt; remove(optional Permissions permissions);
 
-  attribute EventHandler onAdded;
-  attribute EventHandler onRemoved;
+  readonly attribute PermissionsEvent onAdded;
+  readonly attribute PermissionsEvent onRemoved;
 };
 </pre>
 
-Issue: All three engines additionally accept a callback function as a trailing argument on
-every method here, resolved/invoked instead of returning a promise when supplied. This
-specification defines only the promise form here; see [Promises and callbacks](https://w3c.github.io/webextensions/specification/#promises-and-callbacks) (currently empty)
-for how dual promise/callback signatures are expressed generally.
-
-Issue: Chromium's `permissions.json` also declares `addHostAccessRequest` and
-`removeHostAccessRequest`, and Firefox declares a separate `AnyPermissions` dictionary (adding a
-`data_collection` member, pref-gated, used only by `getAll` and `contains`) distinct from the
-`Permissions` dictionary used by `request`/`remove`/the events. Both are Chromium- or
-Firefox-specific; whether either belongs in the shared spec is undecided.
-
-## The `Permissions` dictionary ## {#permissions-dictionary}
-
-A {{Permissions}} dictionary's `permissions` member is a list of named API permission strings,
-excluding host permissions. Its `origins` member is a list of [=match pattern=]s.
-
-Issue: All three engines validate `permissions` strings against a closed, engine-specific set of
-recognized permission names, and validate `origins` entries using the same [=match pattern=]
-grammar used for the `host_permissions` manifest key. What the shared set of recognized
-permission names is, and how strictly it is enforced, is not yet specified normatively.
-
-Issue: Firefox additionally recognizes a `data_collection` member on the dictionary it accepts
-and returns, listing data-collection permission strings declared in the manifest's
-`data_collection_permissions` key. Neither Chromium nor WebKit implement a `data_collection`
-concept. Whether data-collection permissions are in scope for this specification, and if so
-whether {{Permissions}} should include a `data_collection` member, is unresolved.
-
-## `getAll()` ## {#permissions-getall}
+### `getAll()` ### {#permissions-getall}
 
 <dfn method for="permissions">getAll()</dfn> returns the extension's complete current set of
-permissions and [=match pattern=]s: both the permissions and host permissions required by the
-manifest, and any optional or runtime-host permissions currently granted.
+permissions and [=match pattern|match patterns=]: both the permissions and host permissions
+required by the manifest, and any optional or runtime-host permissions currently granted.
 
 1. Let |result| be a new {{Permissions}} dictionary.
 1. Set |result|["permissions"] to the extension's currently active named API permissions,
     combining permissions required by the manifest and optional permissions currently granted.
-1. Set |result|["origins"] to the extension's currently active host [=match pattern=]s,
-    combining host permissions required by the manifest and optional or runtime host
-    permissions currently granted.
+1. Set |result|["origins"] to the extension's currently active host
+    [=match pattern|match patterns=], combining host permissions required by the manifest and
+    optional or runtime host permissions currently granted.
 1. Return |result|.
 
-Issue: Whether the returned `origins` list may include a synthesized "matches all hosts"
-pattern that is not literally present in the manifest or in any single granted permission, when
-the union of currently granted host access happens to cover all hosts, is engine-specific and
-unresolved. One implementation does this; the other two return only the origins actually
-declared or granted.
+Issue: May the returned `origins` list include a synthesized "matches all hosts" pattern that is
+not literally present in the manifest or in any single granted permission, when the union of
+currently granted host access happens to cover all hosts? Safari does this; Chrome and Firefox
+return only the origins actually declared or granted.
 
-## `contains()` ## {#permissions-contains}
+### `contains()` ### {#permissions-contains}
 
 <dfn method for="permissions">contains(permissions)</dfn> checks whether the extension currently
 has every permission and origin named in |permissions|.
@@ -108,20 +104,25 @@ has every permission and origin named in |permissions|.
     active host [=match pattern=] on the extension, return `false`.
 1. Return `true`.
 
-Issue: what happens when a `permissions` or `origins` entry is syntactically well-formed but not
-a permission name or pattern the engine recognizes at all is engine-specific: one implementation
-rejects the returned promise, one throws synchronously before the returned promise is even
-created, and the third throws synchronously for this method specifically while resolving or
-rejecting a promise for the same condition in `request()`/`remove()`.
+<div class=issue>
+An entry that is well formed but is not a name the browser recognizes
+fails differently in each:
 
-## `request()` ## {#permissions-request}
+* Chrome: rejects the returned promise.
+* Firefox: throws synchronously.
+* Safari: throws synchronously for `contains()`, but rejects the promise
+    for `request()` and `remove()`.
+
+</div>
+
+### `request()` ### {#permissions-request}
 
 <dfn method for="permissions">request(permissions)</dfn> asks the user to grant the extension
 some or all of |permissions|, where those are not already active. It must only be called while
-handling a [=user gesture=].
+handling a [=user activation=].
 
 1. Let |permissions| be the method's argument.
-1. If this call is not happening within a [=user gesture=], reject with an error.
+1. If this call is not happening within a [=user activation=], reject with an error.
 1. If any named permission in |permissions|["permissions"] is not declared in the extension's
     `optional_permissions` manifest key, reject with an error.
 1. If any [=match pattern=] in |permissions|["origins"] is not subsumed by a [=match pattern=]
@@ -136,30 +137,44 @@ handling a [=user gesture=].
     already has active.
 1. If the user does not approve the prompt, resolve with `false`.
 1. Grant the extension the requested permissions and origins that were not already active. This
-    fires [=permissions/onAdded=] for the newly granted set.
+    fires {{permissions/onAdded}} for the newly granted set.
 1. Resolve with `true`.
 
-Issue: The three implementations diverge on what happens when there is no window available to
-show the permission prompt in, independently of the user-gesture requirement above. One
-implementation treats "no active window" as its own rejection distinct from "no user gesture".
-Another has no concept of an active window at this layer at all, delegates prompting to the
-embedding application, and silently resolves `false` if the application never responds within a
-fixed timeout. The third has no window requirement either and dispatches the prompt as a
-notification carrying whatever UI surface is available. This specification defines only the
-outcomes all three agree on (reject with no gesture; resolve `false` if the application-level
-prompt is never approved) and leaves the window requirement itself unspecified.
+<div class=issue>
+The browsers differ on what happens when no window is available to show
+the prompt in, separately from the user activation requirement:
 
-Issue: Whether an extension may call `request()` from a context other than its background or
-extension pages, specifically from a content script, is a genuine three-way split. Two
-implementations exclude the entire `permissions` namespace from content scripts. The third
-exposes `request()` specifically to content scripts while keeping the rest of the namespace
-restricted to background/extension-page contexts. Which behavior is normative is unresolved.
+* Chrome: rejects, distinctly from the no-activation rejection.
+* Firefox: no window requirement. Prompts through whatever surface is available.
+* Safari: no window concept. The embedding application prompts, and the
+    call resolves false if it never responds.
 
-Issue: Whether a managed/enterprise policy may cause `request()` to reject outright, before any
-prompt, is implemented in two of the three engines; the third engine's behavior here is
-unconfirmed.
+</div>
 
-## `remove()` ## {#permissions-remove}
+Chrome and Safari exclude the entire `permissions` namespace from content scripts. Firefox
+exposes `request()` alone to content scripts, keeping the rest of the namespace restricted to
+background and extension-page contexts.
+
+WebKit's extension engine grants no permission on its own; `request()` always defers to the
+embedding application through the `WKWebExtensionControllerDelegate` prompt callbacks. WebKit
+also exposes `deniedPermissions`/`deniedPermissionMatchPatterns` as properties the application
+sets directly, and a permission or host present there is excluded from the request before the
+prompt callback is ever invoked, so `request()` resolves without showing UI for it. Safari uses
+exactly this mechanism for host permissions on supervised, MDM-managed devices: the
+`com.apple.configuration.safari.extensions.settings` payload's `AllowedDomains`/`DeniedDomains`
+keys pre-decide per-extension host access, with a denied domain always taking precedence. So a
+managed policy can and does cause Safari's `request()` to resolve without a prompt for a denied
+host, the same behavioral effect as Chrome's and Firefox's enterprise-blocked path
+([w3c/webextensions#260](https://github.com/w3c/webextensions/issues/260), open as of
+2026-05-04), implemented at the application layer rather than as an engine-level policy check.
+
+Issue: Apple's documented MDM schema for Safari extensions covers host/domain access only
+(`AllowedDomains`/`DeniedDomains`); it defines no equivalent key for non-host API permissions
+such as `tabs` or `downloads`. WebKit's engine exposes the same pre-denial primitive for those
+permissions (`WKWebExtensionContext.deniedPermissions`), but whether Safari populates it from
+policy is not documented anywhere public, and Safari's application source is closed.
+
+### `remove()` ### {#permissions-remove}
 
 <dfn method for="permissions">remove(permissions)</dfn> relinquishes some or all of the
 extension's currently active optional permissions and origins.
@@ -172,26 +187,42 @@ extension's currently active optional permissions and origins.
     extension's manifest, reject with an error.
 1. Revoke each named permission and [=match pattern=] in |permissions| that is currently active
     on the extension. Entries in |permissions| that are not currently active are ignored rather
-    than treated as an error. This fires [=permissions/onRemoved=] for the revoked set, if any.
+    than treated as an error. This fires {{permissions/onRemoved}} for the revoked set, if any.
 1. Resolve with `true`.
 
-## `onAdded` ## {#permissions-onadded}
+## Events ## {#permissions-events}
+
+Issue: {{PermissionsEvent}} below is a minimal local stand-in for the WebExtensions
+event-listener pattern (`addListener()`, `removeListener()`, `hasListener()`) used by every
+event in this specification. A shared `events.Event` definition belongs in a common section of
+the specification, not duplicated in each namespace that fires one.
+
+<pre class="idl">
+callback PermissionsListener = undefined (optional Permissions changed);
+
+interface PermissionsEvent {
+  undefined addListener(PermissionsListener listener);
+  undefined removeListener(PermissionsListener listener);
+  boolean hasListener(PermissionsListener listener);
+};
+</pre>
+
+### `onAdded` ### {#permissions-onadded}
 
 The <dfn attribute for="permissions">onAdded</dfn> event fires with a {{Permissions}}
 dictionary listing the permissions and origins newly granted to the extension, whenever the
 extension's active permissions increase. This includes grants made through
-[=permissions/request=], and grants made through user agent UI outside of the `permissions` API
+{{permissions/request}}, and grants made through user agent UI outside of the `permissions` API
 (for example, a browser action letting the user grant a withheld host permission).
 
-Issue: whether a permission or host-permission grant driven entirely by administrative/managed
-policy also fires `onAdded` is a confirmed divergence for at least one engine: that engine
-explicitly does not fire `onAdded`/`onRemoved` for policy-driven changes. Whether the other two
-engines' policy-driven grants go through the same code path as user- and API-driven grants, and
-therefore also fire the event, is unconfirmed.
+Chrome explicitly does not fire `onAdded`/`onRemoved` for permission or host-permission grants
+driven entirely by administrative or managed policy. Whether Firefox's and Safari's
+policy-driven grants go through the same code path as user- and API-driven grants, and therefore
+also fire the event, is unconfirmed.
 
-## `onRemoved` ## {#permissions-onremoved}
+### `onRemoved` ### {#permissions-onremoved}
 
 The <dfn attribute for="permissions">onRemoved</dfn> event fires with a {{Permissions}}
 dictionary listing the permissions and origins no longer granted to the extension, whenever the
-extension's active permissions decrease, whether through [=permissions/remove=] or through user
+extension's active permissions decrease, whether through {{permissions/remove}} or through user
 agent UI.

@@ -48,6 +48,9 @@ echo "== REGRESSION CHECKS =="
 echo "-- Issue: shorthand leaking into normative text --"
 python3 "$TOOLS/check_issue_leaks.py" "$SECTIONS"
 echo
+echo "-- autolink suffix outside the link (e.g. [=term=]ing) --"
+python3 "$TOOLS/check_autolink_suffix.py" "$SECTIONS"
+echo
 
 rm -rf "$OUT"
 mkdir -p "$OUT/standalone" "$OUT/merged"

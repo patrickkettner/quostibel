@@ -23,14 +23,14 @@ spec:infra; type:dfn; text:user agent
 
 An <dfn>extension ID</dfn> is an opaque string that identifies a WebExtension. Every loaded WebExtension has an extension ID.
 
-An extension ID is unique within the scope in which it is used to look up a WebExtension: at minimum, within one [=user agent=] profile. A [=user agent=] must not have two different currently-loaded WebExtensions with the same extension ID in the same profile. Loading a WebExtension whose extension ID matches an already-loaded WebExtension is an update of that WebExtension, not the addition of a second, distinct one.
+A [=user agent=] must not have two different currently-loaded WebExtensions with the same extension ID in the same profile. Loading a WebExtension whose extension ID matches an already-loaded WebExtension is an update of that WebExtension, not the addition of a second, distinct one.
 
 <div class=issue>
-User agents diverge sharply on how the extension ID is produced, and this
+Browsers diverge sharply on how the extension ID is produced, and this
 needs a normative resolution rather than just a description of current
 behavior:
 
-* Chromium derives the ID deterministically by hashing the extension's
+* Chrome derives the ID deterministically by hashing the extension's
     packaging public key (the first 16 bytes of the SHA-256 hash of the
     DER-encoded public key, re-encoded using the 16-letter alphabet
     `a`-`p` instead of hexadecimal, giving a fixed 32-character lowercase
@@ -38,7 +38,7 @@ behavior:
     an ID hashed from its filesystem path instead, which is stable across
     reloads of that same path but changes if the extension is moved or
     later packed with a key.
-* Gecko takes the ID directly from the `id` property of the manifest's
+* Firefox takes the ID directly from the `id` property of the manifest's
     `browser_specific_settings.gecko` key (or the deprecated
     `applications.gecko.id`), authored by the developer. The accepted
     forms are a GUID wrapped in braces (`{8-4-4-4-12 hex digits}`) or an
@@ -48,53 +48,74 @@ behavior:
     omitted, the package is unsigned, and the load is a temporary
     development load, an ID is generated that is explicitly not stable
     across restarts.
-* WebKit does not read any ID from the manifest at all. The identifier is
+* Safari does not read any ID from the manifest at all. The identifier is
     a property the embedding application assigns to the extension out of
     band, defaulting to a freshly generated random value if the
     application does not supply one. Nothing about that default ties it
     to the extension's manifest, package, or signing key, and unlike the
-    other two engines it is not required to fit any particular character
+    other two browsers it is not required to fit any particular character
     set.
 
 Whatever this specification settles on has to be satisfiable by all
-three: either a derivation algorithm all engines can adopt, or a
+three: either a derivation algorithm every browser can adopt, or a
 deliberately loose definition (an opaque, [=user agent=]-assigned string
 meeting only a minimum uniqueness and stability bar) that leaves
 derivation as an implementation detail.
 </div>
 
-Issue: The accepted character set, length, and case-sensitivity of an extension ID are not aligned across engines and need a decision: exactly 32 characters from `a`-`p` (Chromium), a braced GUID or an email-like string (Gecko), or an unconstrained non-empty string (WebKit). A [=user agent=] that only accepts its own native form cannot load a WebExtension packaged with another engine's form of ID.
+The accepted character set, length, and case-sensitivity of an extension ID are implementation-defined.
 
 <div class="example">
-Depending on the [=user agent=], an extension ID may look like `bmnlcjabdbnaibedpokdopcffdilbkco` (Chromium's derived form), `{daf44bf7-a45e-4450-979c-91cf07434c3a}` or `my-extension@example.org` (Gecko's authored forms), or any other unique string an embedding application assigns.
+Depending on the [=user agent=], an extension ID may look like `bmnlcjabdbnaibedpokdopcffdilbkco` (Chrome's derived form), `{daf44bf7-a45e-4450-979c-91cf07434c3a}` or `my-extension@example.org` (Firefox's authored forms), or any other unique string an embedding application assigns.
 </div>
 
-An extension ID must be stable for the lifetime of a given installation of a WebExtension: reloading, restarting the [=user agent=], or restarting the device must not change it. Whether the same extension ID is produced again for a *separate* installation of the same WebExtension source, on the same or a different machine, or when loading the same source both unpacked and packed, is [=extension ID=] derivation, not a requirement.
+An extension ID must be stable for the lifetime of a given installation of a WebExtension: reloading, restarting the [=user agent=], or restarting the device must not change it. Whether the same extension ID is produced again for a *separate* installation of the same WebExtension source, on the same or a different machine, or when loading the same source both unpacked and packed, depends on how each [=user agent=] derives its IDs, and is not required by this specification.
 
-Issue: Which of the above stability guarantees a [=user agent=] must provide by default is unresolved. Chromium's key-derived ID is stable across every reinstall of the same signed package, on any machine. Gecko's manifest-authored ID is likewise stable across reinstalls, by construction, as long as the manifest is unchanged. WebKit provides no such default: a freshly generated identifier is not guaranteed to survive even a relaunch of the embedding application unless that application explicitly persists and reassigns one before each load.
+<div class=issue>
+Must an extension ID survive more than the installation that created it?
+
+* Chrome: derived from the packaging key, so it is the same for every
+    install of the same signed package, on any machine.
+* Firefox: authored in the manifest, so it is the same for every install
+    while the manifest is unchanged.
+* Safari: a freshly generated identifier is not guaranteed to survive
+    even a relaunch, unless the embedding application persists it and
+    reassigns it before each load.
+
+</div>
 
 An [=extension origin=]'s extension-specific host is not necessarily the extension ID.
 
 <div class=issue>
-Engines diverge on whether the [=extension origin=] host equals the
-[=extension ID=]:
+Must the [=extension origin=] host be the [=extension ID=]?
 
-* Chromium's [=extension origin=] host is the extension ID directly.
-* Gecko's [=extension origin=] host is a separate, randomly generated
+* Chrome's [=extension origin=] host is the extension ID directly.
+* Firefox's [=extension origin=] host is a separate, randomly generated
     identifier, unrelated to the extension ID, generated once per
     (profile, extension) pair and persisted for the life of that
-    profile. This is deliberate: it prevents a web page from testing
-    whether a given extension is installed by attempting to load a
-    resource from a URL built from that extension's ID.
-* WebKit's [=extension origin=] host defaults to the extension ID, but
+    profile. This is deliberate, to avoid exactly the observability the
+    general rule below describes.
+* Safari's [=extension origin=] host defaults to the extension ID, but
     the embedding application may set the two independently, so they are
     not guaranteed to match.
 
 A [=user agent=] should not be required to expose the extension ID as
-the [=extension origin=] host, since doing so forecloses Gecko's
-anti-fingerprinting design.
+the [=extension origin=] host, since doing so forecloses Firefox's
+anti-fingerprinting design. This bears directly on how observable the
+extension ID is from a web page, including through a
+[=web accessible resource=]; see
+[w3c/webextensions#868](https://github.com/w3c/webextensions/issues/868)
+for a concrete leak of this kind via declarativeNetRequest redirects.
+Tracked at
+[w3c/webextensions#238](https://github.com/w3c/webextensions/issues/238) and
+[#896](https://github.com/w3c/webextensions/issues/896), and discussed at the
+2025-11-10 TPAC and 2026-04-09 London face-to-face sessions; no resolution
+reached as of the newest minutes checked.
 </div>
 
 The extension ID is available to a [=privileged extension context=] and [=content script context=] of the WebExtension it identifies. An extension may also learn the extension ID of another, cooperating extension through APIs that name it explicitly, such as [`externally_connectable`](https://w3c.github.io/webextensions/specification/#key-externally_connectable).
 
-Issue: Whether, and how, an extension ID is observable from a [=main world=] that is not an [=extension context=] depends on whether the [=user agent=]'s [=extension origin=] host is the extension ID (see above): where it is, a web page that can reach an [=extension origin=] resource (for example, a [=web accessible resource=]) observes the extension ID as that resource's host.
+Where a [=user agent=]'s [=extension origin=] host is the [=extension
+ID=], a web page that can load a resource from that origin, such as a
+[=web accessible resource=], observes the extension ID as that
+resource's host.

@@ -16,15 +16,14 @@ Markup Shorthands: markdown yes
 spec:url; type:dfn; text:scheme
 spec:url; type:dfn; for:url; text:host
 spec:url; type:dfn; text:path
+spec:html; type:dfn; text:transient activation
 spec:infra; type:dfn; text:user agent
 </pre>
 
 # Host permissions # {#host-permissions}
 
 A <dfn>host permission</dfn> is a [=match pattern=] listed in
-[`host_permissions`](https://w3c.github.io/webextensions/specification/#key-host_permissions) (or, for a manifest with
-[`manifest_version`](https://w3c.github.io/webextensions/specification/#key-manifest_version) less than `3`, a [=match pattern=] listed in
-[`permissions`](https://w3c.github.io/webextensions/specification/#key-permissions)), or granted at runtime as described below. Together
+[`host_permissions`](https://w3c.github.io/webextensions/specification/#key-host_permissions), or granted at runtime as described below. Together
 the extension's granted host permissions form its <dfn>granted host
 permissions</dfn>.
 
@@ -37,7 +36,7 @@ are true:
     through [[#user-gestures-and-activetab]].
 
 [=Access to a URL=] is the single gate used throughout this specification
-and by the `browser` APIs for:
+and by the `browser` APIs for at least:
 
 * Injecting a [=content script=] into a document (see
     [Inject a content script](https://w3c.github.io/webextensions/specification/#inject-a-content-script)).
@@ -45,18 +44,33 @@ and by the `browser` APIs for:
 * Reading or modifying cookies for a URL, for example with `cookies`.
 * Exposing a tab's `url`, `title`, and `favIconUrl` to the extension,
     unless the extension also has the `tabs` permission.
-
-Issue: The precise list of gated capabilities differs slightly between
-implementations at the edges (for example, which declarativeNetRequest
-features require host access). The core four above (content scripts,
-webRequest, cookies, tabs visibility) are confirmed identical in
-Chromium, Gecko, and WebKit source.
+* Applying a declarativeNetRequest rule that modifies or redirects a
+    matched request (`modifyHeaders`, `redirect`); a rule that only blocks
+    or upgrades a request's scheme (`block`, `upgradeScheme`) does not
+    require host access for the matched URL. Modifying or redirecting a
+    request can be used to relax cross-origin protections (for example via
+    CORS or CSP response headers) or otherwise affect content the
+    extension does not otherwise have access to
+    ([w3c/webextensions#782](https://github.com/w3c/webextensions/issues/782), closed 2025-03-27).
 
 ## Restricted URLs ## {#restricted-urls}
 
-An extension never has [=access to a URL=] whose [=scheme=] is not one of
-the schemes valid for [=match patterns=], regardless of any granted host
-permission, including `<all_urls>`.
+An extension's host permissions, including `<all_urls>`, never grant
+[=access to a URL=] whose [=scheme=] is not one of the schemes valid for
+[=match patterns=]. This restriction, and the further restriction of
+specific hosts and schemes described below, governs every access path that
+is mediated by host permissions (content scripts, and API access such as
+`webRequest`, `cookies`, and `tabs`). It does not by itself describe a
+browser-specific debugging API such as Chrome's `debugger` permission,
+which is out of scope for this section; where such an API exists, an
+implementation should state its own access boundary rather than relying on
+this one, since the two need not coincide. In Chrome specifically,
+`chrome.debugger.attach()` bypasses the requirement that a URL fall within
+the extension's granted host permissions, while remaining subject to the
+scheme and specific-host restrictions described below. A browser instance
+launched with external remote debugging (for example
+`--remote-debugging-port`) is outside this specification's scope
+regardless.
 
 Implementations additionally restrict specific hosts and schemes beyond
 what [=match pattern=] parsing alone would allow, independently of
@@ -71,70 +85,48 @@ whether a granted [=match pattern=] would otherwise match:
     off-limits, for example to protect account-management or
     extension-store login flows.
 
-<div class=issue>
-The three engines implement this list very differently and none of them
-specify it declaratively. What's known from source:
-
-* Chromium unconditionally refuses to script the Chrome Web Store
-    (`chrome.google.com/webstore`, `chromewebstore.google.com`), refuses
-    `chrome://` pages unless a command-line flag is set (and even then,
-    MV3 extensions get no `chrome://` access at all; MV2 extensions may
-    get `chrome://favicon` only), and refuses other extensions'
-    `chrome-extension://` pages unless a flag is set.
-* Gecko refuses a configurable list of domains
-    (`extensions.webextensions.restrictedDomains`, defaulting to AMO and
-    Mozilla account domains) and a separately configurable
-    "quarantined domains" list that privileged extensions can be
-    exempted from.
-* WebKit's engine-level source defines no gallery/store restriction list
-    at all; Safari Web Extensions are distributed through the App Store
-    review process rather than a web-reachable gallery, so there may be
-    nothing analogous to protect at this layer.
-
-The group needs to decide whether this spec normatively lists restricted
-hosts/schemes (and if so, whose list), or leaves it
-implementation-defined.
-</div>
+Issue: The restricted set above is implementation-defined in Chrome,
+Firefox, and Safari, and none of the three declare it in a way an
+extension can discover at runtime. The group needs to decide whether this
+specification normatively lists restricted hosts/schemes (and if so,
+whose list), requires the restricted set to be discoverable, or leaves it
+implementation-defined as today.
 
 ## Granting host permissions ## {#granting-host-permissions}
 
-A [=match pattern=] listed in [`host_permissions`](https://w3c.github.io/webextensions/specification/#key-host_permissions) (or, pre-MV3, in
-[`permissions`](https://w3c.github.io/webextensions/specification/#key-permissions)) is a <dfn>required host permission</dfn>. A [=match
-pattern=] listed in [`optional_host_permissions`](https://w3c.github.io/webextensions/specification/#key-optional_host_permissions) (or, pre-MV3, in
-[`optional_permissions`](https://w3c.github.io/webextensions/specification/#key-optional_permissions)) is an <dfn>optional host permission</dfn>,
+A [=match pattern=] listed in [`host_permissions`](https://w3c.github.io/webextensions/specification/#key-host_permissions) is a <dfn>required host permission</dfn>. A [=match
+pattern=] listed in [`optional_host_permissions`](https://w3c.github.io/webextensions/specification/#key-optional_host_permissions) is an <dfn>optional host permission</dfn>,
 and is not part of the extension's [=granted host permissions=] until
 granted as described in this section.
 
-<div class=issue>
-Implementations disagree on whether a required host permission is part
-of the extension's [=granted host permissions=] as soon as the extension
-is installed:
+Chrome and Firefox both grant required host permissions automatically at
+install time, then let the user subsequently withhold a granted host
+permission from a specific site through browser UI, at which point the
+extension's effective access to that site reverts to a runtime-request
+flow even though the permission is still listed as required in the
+manifest. WebKit's engine performs no automatic grant at all, for either
+required or optional host permissions; the embedding application is
+responsible for presenting required permissions to the user (for example
+at install or update) and recording the result, and nothing in the engine
+forces this to happen or guarantees a required host permission is granted
+by the time the extension runs.
 
-* Chromium and Gecko grant required host permissions automatically at
-    install time. Both then let the user subsequently withhold a
-    granted host permission from a specific site through browser UI
-    (Chromium: "runtime host permissions" / site access controls; Gecko:
-    "origin controls"), at which point the extension's effective access
-    to that site reverts to a runtime-request flow even though the
-    permission is still listed as required in the manifest.
-* WebKit's engine performs no automatic grant at all, for either
-    required or optional host permissions. The embedding application is
-    responsible for presenting required permissions to the user (for
-    example at install or update) and recording the result; nothing in
-    the engine forces this to happen, or guarantees a required host
-    permission is granted by the time the extension runs.
-
-The group should decide whether this specification requires required
-host permissions to be granted automatically, requires user consent
-before every use, or leaves the choice to the implementation (as today).
-</div>
+This specification does not require required host permissions to be
+granted automatically at install, nor does it require user consent before
+every use. The standardized `optional_host_permissions` manifest key lets
+an extension author declare which host permissions are not required for
+core functionality and must be requested at runtime via
+{{permissions/request()}}; whether permissions listed in `host_permissions`
+are granted automatically at install, deferred to a runtime consent step,
+or made revocable or withholdable by the user is left to the
+implementation ([w3c/webextensions#119](https://github.com/w3c/webextensions/issues/119), closed 2022-10-18).
 
 To <dfn>request</dfn> a set of host permissions, an extension calls
-[=permissions.request()=] with those [=match patterns=] in `origins`.
+{{permissions/request()}} with those [=match pattern|match patterns=] in `origins`.
 This may only be called from a [=privileged extension context=] and only
-while handling a [=user gesture=]. The implementation must either add
+while handling a [=user activation=]. The implementation must either add
 each requested pattern to the extension's [=granted host permissions=],
-or deny the entire request; a partial grant of a single `permissions.request()`
+or deny the entire request; a partial grant of a single {{permissions/request()}}
 call is not observable by the extension.
 
 <div class="example">
@@ -152,9 +144,8 @@ let granted = await browser.permissions.request({
 
 ## Cross-origin fetch ## {#cross-origin-fetch}
 
-A request made from a [=privileged extension context=] (a background
-page or worker, a popup, an options page, or any other extension-hosted
-page) whose target URL is matched by the extension's [=granted host
+A request made from a [=privileged extension context=] whose target URL is
+matched by the extension's [=granted host
 permissions=] is exempt from [[FETCH#http-cors-protocol]]: the request
 proceeds, and the response is made available to the requesting script,
 without regard to `Access-Control-Allow-Origin` or any other CORS
@@ -170,30 +161,30 @@ A granted host permission does not change this outcome, even
 `<all_urls>`.
 
 <div class=issue>
-All three engines converge on the content-script rule above as of their
-current MV3 behavior, but they arrived there differently, and one
-engine's manifest-version handling is unconfirmed:
+Chrome, Firefox, and Safari converge on the content-script rule above as
+of their current MV3 behavior, but they arrived there differently, and
+Safari's historical (MV2) behavior is unconfirmed:
 
-* Chromium removed cross-origin content script fetches as a platform
+* Chrome removed cross-origin content script fetches as a platform
     change (Chrome 73 CORB, Chrome 85 CORS enforcement, allowlist fully
     removed in Chrome 87), independent of manifest version; MV2 and MV3
-    extensions in current Chromium both get page-origin-only fetch from
+    extensions in current Chrome both get page-origin-only fetch from
     content scripts.
-* Gecko gates this explicitly on manifest version: an MV2 content
+* Firefox gates this explicitly on manifest version: an MV2 content
     script's `fetch`/`XMLHttpRequest`/`WebSocket` run with a principal
     that includes the extension's own principal (bypassing CORS via host
-    permissions, per Gecko's own source comments), while an MV3 content
+    permissions, per Firefox's own source comments), while an MV3 content
     script gets no such override and inherits the page's own `fetch`/XHR.
 * WebKit wires its CORS bypass configuration only into extension-page
     web views, never into the content-script world; no MV2-specific
-    content-script fetch override is present. Whether WebKit ever offered
+    content-script fetch override is present. Whether Safari ever offered
     content scripts a cross-origin fetch bypass, for either manifest
     version, is unconfirmed.
 
-The group should confirm WebKit's historical (MV2) behavior before this
+The group should confirm Safari's historical (MV2) behavior before this
 specification states the MV2 case normatively, and decide whether this
 specification describes MV2 content-script fetch behavior at all, given
-it is a legacy, converged-away-from state in the other two engines.
+it is a legacy, converged-away-from state in Chrome and Firefox.
 </div>
 
 <div class="example">
@@ -215,14 +206,17 @@ itself a subsection of "# Host permissions" in the target document.
 
 ## User gestures and activeTab ## {#user-gestures-and-activetab}
 
-A <dfn>user gesture</dfn> is browser-mediated user input that an
-implementation treats as deliberate interaction with a specific
-extension, such as clicking the extension's toolbar action, invoking one
-of its keyboard [`commands`](https://w3c.github.io/webextensions/specification/#key-commands), choosing one of its context menu
-items, or (implementation-defined) selecting it from the address bar.
+A <dfn export>user activation</dfn> is [=transient activation=] of the document
+handling the interaction, extended to browser-chrome surfaces that have no
+document at all: clicking the extension's toolbar action, invoking one of
+its keyboard [`commands`](https://w3c.github.io/webextensions/specification/#key-commands), choosing one of its context menu
+items, or (implementation-defined) selecting it from the address bar. A
+[=user activation=] triggered from one of those surfaces is scoped to the
+extension it was directed at, the same way [=transient activation=] is
+scoped to a browsing context.
 
 If an extension declares the `activeTab` permission, then each
-time a [=user gesture=] for that extension occurs while a tab is active,
+time a [=user activation=] for that extension occurs while a tab is active,
 the extension is granted a <dfn>temporary host permission</dfn> for that
 tab: for the remainder of the tab's current navigation, the extension has
 [=access to a URL=] matching the tab's current URL as if that URL were
@@ -231,34 +225,35 @@ the `tabs` permission for that tab (exposing its `url`, `title`,
 and `favIconUrl`).
 
 A [=temporary host permission=] does not persist across navigation of the
-tab's top-level document to a different origin; a fresh [=user gesture=]
+tab's top-level document to a different origin; a fresh [=user activation=]
 is required after such a navigation. It does not grant access to any
 other tab, and it does not add anything to the extension's [=granted host
-permissions=] as observed by `permissions.getAll()`.
+permissions=] as observed by {{permissions/getAll()}}.
 
 <div class=issue>
-The three engines agree on what `activeTab` grants and on which user
-gestures trigger it (toolbar action, keyboard command, context menu
-item; the omnibox/address bar in Chromium and Gecko), but disagree on
+Chrome, Firefox, and Safari agree on what `activeTab` grants and on which
+user activations trigger it (toolbar action, keyboard command, context
+menu item; the omnibox/address bar in Chrome and Firefox), but disagree on
 exactly when the temporary grant is revoked:
 
-* Chromium revokes it when the tab's main frame completes a committed,
+* Chrome revokes it when the tab's main frame completes a committed,
     cross-origin navigation (same-origin navigations, and any subframe
     navigation, leave it intact).
-* WebKit revokes it when the tab's main frame commits a URL no longer
-    matched by the granted pattern, which is close to Chromium's rule in
+* Safari revokes it when the tab's main frame commits a URL no longer
+    matched by the granted pattern, which is close to Chrome's rule in
     practice.
-* Gecko does not revoke it on navigation at all: source comments state
-    this is a deliberate difference from Chromium, and the grant instead
+* Firefox does not revoke it on navigation at all: source comments state
+    this is a deliberate difference from Chrome, and the grant instead
     tracks the surviving lifetime of the tab's inner window (including
     back/forward-cache revival), being cleared only when the extension's
     action is invoked again for a different tab or the tab/window is
     destroyed.
 
 The group should decide the revocation rule this specification requires;
-"cross-origin navigation of the top-level document" (the Chromium/WebKit
+"cross-origin navigation of the top-level document" (the Chrome/Safari
 behavior) is the more restrictive and privacy-preserving option of the
-two, but is not what Gecko ships today.
+two, but is not what Firefox ships today. Tracked at
+[w3c/webextensions#657](https://github.com/w3c/webextensions/issues/657), open as of 2026-05-02.
 </div>
 
 <div class="example">

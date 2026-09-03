@@ -25,10 +25,14 @@ Gecko, and WebKit all compare it byte-for-byte in their production code
 paths.
 
 **`?` does not match exactly one character.** The spec currently says it
-does. That's Gecko's behavior. It isn't Chromium's: `base/strings/pattern.h`
+does, added by [w3c/webextensions#542](https://github.com/w3c/webextensions/pull/542), whose
+own author called it "a first draft" and asked reviewers to confirm it was
+accurate. Nobody did, and no other discussion of `?` semantics exists in
+the group's record: it was never checked, not merely wrong. It matches
+Firefox's behavior. It doesn't match Chrome's: `base/strings/pattern.h`
 states plainly that `?` matches 0 or 1 character, and
 `EXPECT_TRUE(MatchPattern("", "?"))` in `pattern_unittest.cc` confirms it.
-WebKit has no `?` semantics to compare, because it doesn't implement
+Safari has no `?` semantics to compare, because it doesn't implement
 `include_globs`/`exclude_globs` matching at all.
 
 **"A glob can be any string" defines the syntax, not the behavior.** The
@@ -87,7 +91,7 @@ compile on its own when the real `index.bs` doesn't, and why.
 
 ## Open Items
 
-Five content defects, found while getting the sections to compile and left
+Three content defects, found while getting the sections to compile and left
 alone rather than fixed, because fixing them is an editorial decision, not a
 markup fix:
 
@@ -101,13 +105,6 @@ markup fix:
    unlinked prose instead.
 3. `[=web accessible resource=]` in extension-ids is never defined anywhere.
    `index.bs` has an empty "Web accessible resources" heading and no dfn.
-4. `dictionary Permissions` and `interface Permissions` share a name in
-   permissions-api's WebIDL. Every `{{Permissions}}` reference in its prose
-   resolves to a random one of the two on each build.
-5. permissions-api's WebIDL uses `interface Permissions` as the `for`
-   context on its method dfns, but host-permissions and permissions-api's
-   own prose link as if there's a lowercase `permissions` namespace instead.
-   Those links are currently dead.
 
 Beyond that: several claims in the source material are marked undetermined
 rather than guessed, because the trace ran out before a definite answer did.

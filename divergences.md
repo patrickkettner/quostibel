@@ -38,6 +38,7 @@ quoted, not recalled.
 | 25 | `data_collection` permission dimension | Firefox only, pref-gated | none found | Low: not a bug fix, a whole missing concept for two engines |
 | 26 | Enterprise/managed-policy blocking of optional permission requests | WebKit (unconfirmed absence) | none found | Unknown: absence isn't confirmed, so no fix can be sized yet |
 | 27 | **Extension ID derivation is irreconcilable three ways**; Gecko deliberately decouples the origin host from the ID as an anti-fingerprinting measure | all three differ, Gecko's difference is intentional | none on w3c/webextensions; Mozilla-side #1717671 (NEW, active ~5 months ago) and meta-bug #1372288 push Gecko's decoupling *further*, not toward convergence | Lowest: this is a "specify the difference," not a "please converge" - Gecko's behavior is a considered privacy feature |
+| 28 | `addHostAccessRequest`/`removeHostAccessRequest` (Chrome only); `AnyPermissions` (Firefox only) | Chrome and Firefox each carry a method/dictionary the other two lack | w3c/webextensions proposal `permissions-addHostAccessRequest-api.md`, PR #529/#728, #700 (closed, Safari opposed); minutes 2025-10-23 and 2025-03-26-berlin-f2f | Inventory difference, not a behavior mismatch on a shared member - out of scope for a cross-browser core spec by construction |
 
 ---
 
@@ -851,3 +852,26 @@ one of the four editors of specification/index.bs.
 This makes #55 the most actionable item in this document: the contribution is
 correcting a stated premise with a dated source citation, not arguing for a
 behavior change.
+
+## 28. `addHostAccessRequest`/`removeHostAccessRequest` (Chrome only); `AnyPermissions` (Firefox only)
+
+**Outlier**: Chrome and Firefox each add a member the other two engines don't have. Chrome's
+`permissions.json` declares `addHostAccessRequest`/`removeHostAccessRequest`, methods that let an
+extension ask the browser to surface its own "request access to this site" toolbar UI rather than
+prompting through `permissions.request()`. Firefox declares a separate `AnyPermissions`
+dictionary, used only by `getAll()`/`contains()`, distinct from the `Permissions` dictionary used
+by `request()`/`remove()`/the events; its only difference from `Permissions` is the
+`data_collection` member (see item 25).
+
+**Existing conversation**: `addHostAccessRequest` was designed collaboratively in the WECG before
+Chrome shipped it (`proposals/permissions-addHostAccessRequest-api.md`, referenced from PR
+#529/#728). Issue #700 (closed) recorded Safari's position against adding it. Minutes
+2025-10-23-wecg.md and 2025-03-26-berlin-f2f.md both discuss whether it should extend to
+Firefox; Safari's non-participation is treated as settled, not open.
+
+**What harmony would look like**: not applicable to this specification. Both are cases of one
+engine having an extra method or dictionary member the others lack entirely, which is an
+inventory difference rather than a behavior mismatch on a member all three implement - out of
+scope for a spec that defines the cross-browser core.
+
+**Cost to the outlier**: n/a - this is a scoping note, not a fix request.
