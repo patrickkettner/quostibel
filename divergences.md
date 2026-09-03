@@ -39,6 +39,7 @@ quoted, not recalled.
 | 26 | Enterprise/managed-policy blocking of optional permission requests | WebKit (unconfirmed absence) | none found | Unknown: absence isn't confirmed, so no fix can be sized yet |
 | 27 | **Extension ID derivation is irreconcilable three ways**; Gecko deliberately decouples the origin host from the ID as an anti-fingerprinting measure | all three differ, Gecko's difference is intentional | none on w3c/webextensions; Mozilla-side #1717671 (NEW, active ~5 months ago) and meta-bug #1372288 push Gecko's decoupling *further*, not toward convergence | Lowest: this is a "specify the difference," not a "please converge" - Gecko's behavior is a considered privacy feature |
 | 28 | `addHostAccessRequest`/`removeHostAccessRequest` (Chrome only); `AnyPermissions` (Firefox only) | Chrome and Firefox each carry a method/dictionary the other two lack | w3c/webextensions proposal `permissions-addHostAccessRequest-api.md`, PR #529/#728, #700 (closed, Safari opposed); minutes 2025-10-23 and 2025-03-26-berlin-f2f | Inventory difference, not a behavior mismatch on a shared member - out of scope for a cross-browser core spec by construction |
+| 29 | Three Safari permission names (`bookmarks`, `offscreen`, `sidePanel`) implemented but compiled out by a disabled build flag | Safari (against its own future self) | none found - a build-flag state, not a bug or proposal | N/a: not a fix request, a note that the recognized-name-set snapshot is volatile |
 
 ---
 
@@ -875,3 +876,25 @@ inventory difference rather than a behavior mismatch on a member all three imple
 scope for a spec that defines the cross-browser core.
 
 **Cost to the outlier**: n/a - this is a scoping note, not a fix request.
+
+---
+
+## 29. Three Safari permission names sit behind a disabled build flag
+
+**Outlier**: Safari, against its own future self. `WebExtension.cpp`'s `supportedPermissions()`
+lists 20 names, but 3 of them - `bookmarks`, `offscreen`, `sidePanel` - are each guarded by a
+macro (`ENABLE(WK_WEB_EXTENSIONS_BOOKMARKS)` / `_OFFSCREEN` / `_SIDEBAR`) that is currently
+defined as `0 && ENABLE_WK_WEB_EXTENSIONS` in `PlatformEnableCocoa.h`, i.e. off in this checkout.
+They are already implemented, just not compiled in. This is why the three-way recognized
+permission name set (evidence/permissions-api.md, section 7) is a volatile fact rather than a
+stable one: flipping any one of these three macros ships a new shared name with no spec change
+and no announcement.
+
+**Existing conversation**: none found. This isn't a bug report or a proposal; it's a build-flag
+state observed by reading source.
+
+**What harmony would look like**: not applicable - Safari already intends to ship all three, the
+flags exist for staged rollout, not as a design disagreement.
+
+**Cost to the outlier**: n/a. Recorded here so the informative note listing the sixteen-name
+intersection in `sections/permissions-api.bs` is understood as a snapshot, not a promise.

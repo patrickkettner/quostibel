@@ -392,6 +392,43 @@ both the `Permissions` dictionary passed to `request`/`remove`/events and the `A
 dictionary returned by `getAll`/`contains`. Confirmed absent from Chrome's schema and WebKit's
 IDL dictionary.
 
+## 7. Recognized permission name set
+
+Computed 2026-09-03 against three local checkouts (`~/chromium/src`, `~/firefox`, `~/WebKit`),
+read-only, filtered by real reachability rather than mere presence in a feature table (an
+allowlisted or component-only entry does not count). Full method and per-engine source citations
+are in the standalone research note this section summarizes.
+
+Per-engine recognized counts: Chrome 86, Firefox 51, Safari 17. Safari has zero names the other
+two lack.
+
+The three-way intersection, all sixteen recognized by all three engines:
+
+```
+activeTab, alarms, clipboardWrite, contextMenus, cookies, declarativeNetRequest,
+declarativeNetRequestFeedback, declarativeNetRequestWithHostAccess, nativeMessaging,
+notifications, scripting, storage, tabs, unlimitedStorage, webNavigation, webRequest
+```
+
+Two semantic divergences beyond mere presence/absence, both source-verified:
+
+- **`menus` vs `contextMenus`**: Firefox and Safari treat `menus` and `contextMenus` as two
+  spellings of the same permission (Firefox: `browser/components/extensions/schemas/menus.json`,
+  one block listing both strings; Safari: `WebExtension.cpp`'s `supportedPermissions()` lists
+  both `menus()` and `contextMenus()`). Chrome has no `menus` entry at all, only `contextMenus`.
+  This is why `contextMenus` makes the sixteen-name intersection while `menus` falls one engine
+  short (Firefox + Safari only).
+- **`webRequestBlocking`**: present in all three engines' permission tables, but Chrome only
+  grants it to an ordinary extension under Manifest V2; a Manifest V3 extension can only obtain
+  it through enterprise policy (`extensions/common/api/_permission_features.json`, two
+  alternatives gated by `max_manifest_version`/`min_manifest_version`). Firefox and Safari carry
+  no such manifest-version split and grant it uniformly whenever declared. The permission name
+  itself is recognized identically everywhere; what declaring it gets you is not.
+
+This set is not stable: see `divergences.md` for the three Safari permission names sitting
+behind a currently-disabled build flag, any one of which would change the intersection with no
+spec change required.
+
 ## Undetermined / not independently confirmed in this pass
 
 - Firefox's `requireUserInput: true` enforcement mechanism for `request()` -- schema declares it

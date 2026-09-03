@@ -39,12 +39,30 @@ and [#883](https://github.com/w3c/webextensions/issues/883).
 ### The `Permissions` dictionary ### {#permissions-dictionary}
 
 A {{Permissions}} dictionary's `permissions` member is a list of named API permission strings,
-excluding host permissions. Its `origins` member is a list of [=match pattern|match patterns=].
+excluding host permissions. Its `origins` member is a list of [=match pattern|match patterns=],
+validated using the same [=match pattern=] grammar used for the `host_permissions` manifest key.
 
-Issue: Each browser validates `permissions` strings against its own closed set of recognized
-permission names, and validates `origins` entries using the same [=match pattern=] grammar used
-for the `host_permissions` manifest key. What the shared set of recognized permission names is,
-and how strictly it must be enforced, is not yet specified normatively.
+Which strings are valid entries in `permissions` is implementation-defined: each browser
+recognizes its own set of permission names, and a name outside a given browser's set is not a
+valid entry for that browser.
+
+Note: As of 2026-09, sixteen permission names are recognized by Chrome, Firefox, and Safari
+alike: `activeTab`, `alarms`, `clipboardWrite`, `contextMenus`, `cookies`,
+`declarativeNetRequest`, `declarativeNetRequestFeedback`, `declarativeNetRequestWithHostAccess`,
+`nativeMessaging`, `notifications`, `scripting`, `storage`, `tabs`, `unlimitedStorage`,
+`webNavigation`, `webRequest`. A name outside this list may be recognized by one or two of the
+three but must not be assumed portable.
+
+<div class=issue>
+An entry that is well formed but is not a name the browser recognizes
+fails differently in each:
+
+* Chrome: rejects the returned promise.
+* Firefox: throws synchronously.
+* Safari: throws synchronously for `contains()`, but rejects the promise
+    for `request()` and `remove()`.
+
+</div>
 
 <pre class="idl">
 dictionary Permissions {
@@ -66,7 +84,7 @@ interface permissions {
   Promise&lt;Permissions&gt; getAll();
   Promise&lt;boolean&gt; contains(optional Permissions permissions);
   Promise&lt;boolean&gt; request(optional Permissions permissions);
-  Promise&lt;boolean&gt; remove(optional Permissions permissions);
+  Promise&lt;undefined&gt; remove(optional Permissions permissions);
 
   readonly attribute PermissionsEvent onAdded;
   readonly attribute PermissionsEvent onRemoved;
@@ -103,17 +121,6 @@ has every permission and origin named in |permissions|.
 1. For each [=match pattern=] in |permissions|["origins"]: if it is not subsumed by a currently
     active host [=match pattern=] on the extension, return `false`.
 1. Return `true`.
-
-<div class=issue>
-An entry that is well formed but is not a name the browser recognizes
-fails differently in each:
-
-* Chrome: rejects the returned promise.
-* Firefox: throws synchronously.
-* Safari: throws synchronously for `contains()`, but rejects the promise
-    for `request()` and `remove()`.
-
-</div>
 
 ### `request()` ### {#permissions-request}
 
@@ -188,7 +195,23 @@ extension's currently active optional permissions and origins.
 1. Revoke each named permission and [=match pattern=] in |permissions| that is currently active
     on the extension. Entries in |permissions| that are not currently active are ignored rather
     than treated as an error. This fires {{permissions/onRemoved}} for the revoked set, if any.
-1. Resolve with `true`.
+1. Resolve with `undefined`.
+
+<div class=issue>
+Why does `remove()` resolve with `undefined` here, when every shipping browser resolves `true`?
+
+* All three browsers currently resolve `true` on success.
+* [w3c/webextensions#1069](https://github.com/w3c/webextensions/issues/1069) (open) argues the
+    boolean is meaningless, since `remove()` never resolves `false`.
+* The sibling case is `alarms.clearAll()`,
+    [w3c/webextensions#1055](https://github.com/w3c/webextensions/issues/1055); the 2026-08-13
+    WECG minutes record a Mozilla engineer saying he would be fine dropping its return value too.
+
+This specification follows #1069 rather than current behavior; no browser resolves `undefined`
+here today. `request()` and `contains()` are not affected: both resolve a boolean that carries
+real information (whether the request was granted, whether the extension has the permission),
+so neither changes.
+</div>
 
 ## Events ## {#permissions-events}
 
