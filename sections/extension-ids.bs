@@ -8,6 +8,7 @@ ED: https://patrickkettner.github.io/quostibel/extension-ids.html
 Abstract: This specification defines the extension ID, its relationship to the extension origin, and the requirements on its uniqueness and stability.
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
+Complain About: accidental-2119 on
 </pre>
 
 <!-- Standalone preamble. Remove metadata and link-defaults when splicing into index.bs. -->
@@ -99,9 +100,9 @@ Must the [=extension origin=] host be the [=extension ID=]?
     the embedding application may set the two independently, so they are
     not guaranteed to match.
 
-A [=user agent=] should not be required to expose the extension ID as
-the [=extension origin=] host, since doing so forecloses Firefox's
-anti-fingerprinting design. This bears directly on how observable the
+Exposing the extension ID as the [=extension origin=] host is not
+necessary, and doing so forecloses Firefox's anti-fingerprinting design.
+This bears directly on how observable the
 extension ID is from a web page, including through a
 [=web accessible resource=]; see
 [w3c/webextensions#868](https://github.com/w3c/webextensions/issues/868)

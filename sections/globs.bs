@@ -8,6 +8,7 @@ ED: https://patrickkettner.github.io/quostibel/globs.html
 Abstract: This specification defines globs, the wildcard syntax used by the `include_globs` and `exclude_globs` content script keys, and the algorithm for matching a URL against one.
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
+Complain About: accidental-2119 on
 </pre>
 
 <!-- Standalone preamble. Remove metadata and link-defaults when splicing into index.bs. -->

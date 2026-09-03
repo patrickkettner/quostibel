@@ -8,6 +8,7 @@ ED: https://patrickkettner.github.io/quostibel/version-number-handling.html
 Abstract: This specification defines the `version` and `version_name` manifest keys, the grammar of a version string, and the algorithm for comparing two version strings.
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
+Complain About: accidental-2119 on
 </pre>
 
 <!-- Standalone preamble. Remove metadata and link-defaults when splicing into index.bs. -->

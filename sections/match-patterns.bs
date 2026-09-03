@@ -9,6 +9,7 @@ Abstract: This specification defines match patterns, the syntax an extension use
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
 Ignored Terms: glob
+Complain About: accidental-2119 on
 </pre>
 
 <!-- Standalone preamble. Remove metadata and link-defaults when splicing into index.bs. -->
@@ -121,7 +122,7 @@ one anyway (e.g. `http://example.com:8080/*`):
     host as invalid at parse time.
 
 The group needs to decide whether match patterns support a port
-component at all and, if not, whether writing one should be a parse
+component at all and, if not, whether writing one is treated as a parse
 error (Safari's behavior) or ignored, rather than silently unmatchable
 (current Firefox behavior).
 </div>
@@ -250,7 +251,7 @@ style checks) in which a pattern that matches subdomains (a leading `*.`
 or bare `*` host) never matches, regardless of the URL. Chrome's and
 Safari's match-pattern matching code has no equivalent mode.
 
-The group should decide whether this "explicit host" restriction belongs
+The group needs to decide whether this "explicit host" restriction belongs
 in this section as a named concept, or is purely a permission-UI concern
 out of scope for match pattern matching itself.
 </div>

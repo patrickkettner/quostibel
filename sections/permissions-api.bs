@@ -8,6 +8,7 @@ ED: https://patrickkettner.github.io/quostibel/permissions-api.html
 Abstract: This specification defines the `permissions` API namespace, through which an extension inspects, requests, and relinquishes its own optional permissions at runtime.
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
+Complain About: accidental-2119 on
 </pre>
 
 <!-- Standalone preamble. Remove metadata and link-defaults when splicing into index.bs. -->
@@ -46,12 +47,29 @@ Which strings are valid entries in `permissions` is implementation-defined: each
 recognizes its own set of permission names, and a name outside a given browser's set is not a
 valid entry for that browser.
 
-Note: As of 2026-09, sixteen permission names are recognized by Chrome, Firefox, and Safari
-alike: `activeTab`, `alarms`, `clipboardWrite`, `contextMenus`, `cookies`,
-`declarativeNetRequest`, `declarativeNetRequestFeedback`, `declarativeNetRequestWithHostAccess`,
-`nativeMessaging`, `notifications`, `scripting`, `storage`, `tabs`, `unlimitedStorage`,
-`webNavigation`, `webRequest`. A name outside this list may be recognized by one or two of the
-three but must not be assumed portable.
+<div class=note>
+As of 2026-09, these sixteen permission names are recognized by Chrome, Firefox and Safari
+alike:
+
+* `activeTab`
+* `alarms`
+* `clipboardWrite`
+* `contextMenus`
+* `cookies`
+* `declarativeNetRequest`
+* `declarativeNetRequestFeedback`
+* `declarativeNetRequestWithHostAccess`
+* `nativeMessaging`
+* `notifications`
+* `scripting`
+* `storage`
+* `tabs`
+* `unlimitedStorage`
+* `webNavigation`
+* `webRequest`
+
+A name outside this list is recognized by at most two of the three, so it is not portable.
+</div>
 
 <div class=issue>
 An entry that is well formed but is not a name the browser recognizes

@@ -8,6 +8,7 @@ ED: https://patrickkettner.github.io/quostibel/host-permissions.html
 Abstract: This specification defines host permissions, the access they grant to URLs, their effect on cross-origin fetch, and the `activeTab` permission.
 Repository: patrickkettner/quostibel
 Markup Shorthands: markdown yes
+Complain About: accidental-2119 on
 </pre>
 
 <!-- Standalone preamble. Remove metadata and link-defaults when splicing into index.bs. -->
@@ -181,7 +182,7 @@ Safari's historical (MV2) behavior is unconfirmed:
     content scripts a cross-origin fetch bypass, for either manifest
     version, is unconfirmed.
 
-The group should confirm Safari's historical (MV2) behavior before this
+The group needs to confirm Safari's historical (MV2) behavior before this
 specification states the MV2 case normatively, and decide whether this
 specification describes MV2 content-script fetch behavior at all, given
 it is a legacy, converged-away-from state in Chrome and Firefox.
@@ -249,7 +250,7 @@ exactly when the temporary grant is revoked:
     action is invoked again for a different tab or the tab/window is
     destroyed.
 
-The group should decide the revocation rule this specification requires;
+The group needs to decide the revocation rule this specification requires;
 "cross-origin navigation of the top-level document" (the Chrome/Safari
 behavior) is the more restrictive and privacy-preserving option of the
 two, but is not what Firefox ships today. Tracked at
