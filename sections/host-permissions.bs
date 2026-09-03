@@ -86,9 +86,8 @@ whether a granted [=match pattern=] would otherwise match:
     off-limits, for example to protect account-management or
     extension-store login flows.
 
-Issue: The restricted set above is implementation-defined in Chrome,
-Firefox, and Safari, and none of the three declare it in a way an
-extension can discover at runtime. The group needs to decide whether this
+Issue: None of Chrome, Firefox, or Safari declare the restricted set above in a way
+an extension can discover at runtime. The group needs to decide whether this
 specification normatively lists restricted hosts/schemes (and if so,
 whose list), requires the restricted set to be discoverable, or leaves it
 implementation-defined as today.
@@ -162,8 +161,7 @@ A granted host permission does not change this outcome, even
 `<all_urls>`.
 
 <div class=issue>
-Chrome, Firefox, and Safari converge on the content-script rule above as
-of their current MV3 behavior, but they arrived there differently, and
+Chrome, Firefox, and Safari arrived at the content-script rule above differently, and
 Safari's historical (MV2) behavior is unconfirmed:
 
 * Chrome removed cross-origin content script fetches as a platform
@@ -232,10 +230,8 @@ other tab, and it does not add anything to the extension's [=granted host
 permissions=] as observed by {{permissions/getAll()}}.
 
 <div class=issue>
-Chrome, Firefox, and Safari agree on what `activeTab` grants and on which
-user activations trigger it (toolbar action, keyboard command, context
-menu item; the omnibox/address bar in Chrome and Firefox), but disagree on
-exactly when the temporary grant is revoked:
+Chrome, Firefox, and Safari disagree on exactly when the temporary grant `activeTab` creates
+is revoked:
 
 * Chrome revokes it when the tab's main frame completes a committed,
     cross-origin navigation (same-origin navigations, and any subframe

@@ -51,6 +51,10 @@ echo
 echo "-- autolink suffix outside the link (e.g. [=term=]ing) --"
 python3 "$TOOLS/check_autolink_suffix.py" "$SECTIONS"
 echo
+echo "-- RFC 2119 keyword inside a class=issue block or Issue: shorthand --"
+echo "   (bikeshed's accidental-2119 check does not look inside class=\"issue\")"
+python3 "$TOOLS/check_issue_2119.py" "$SECTIONS"
+echo
 
 rm -rf "$OUT"
 mkdir -p "$OUT/standalone" "$OUT/merged"

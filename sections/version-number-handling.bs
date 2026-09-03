@@ -31,7 +31,7 @@ The accepted grammar differs in each:
 * Chrome: 1 to 4 dot-separated integers. No leading zero in the first
     component; a leading zero in a later component is accepted and
     normalized, with a warning. Anything else fails to load.
-* Firefox: any string. A recommended grammar is documented and a
+* Firefox: any string. A documented preferred grammar exists and a
     mismatch warns, but the value is used as-is. Firefox's comparator
     also treats a non-numeric part of the value as meaningful rather than
     invalid (see [[#version-comparison]]).
@@ -164,7 +164,7 @@ Implementations disagree on the consequence:
 
 * Chrome: the extension fails to load, with an install error.
 * Firefox: the extension loads. Any non-empty string is used as-is, with
-    a console warning when it does not match the recommended grammar. An
+    a console warning when it does not match the documented preferred grammar. An
     empty string is also accepted.
 * Safari: the engine records an error but does not itself refuse to load
     the extension. Whether Safari blocks installation is unconfirmed.

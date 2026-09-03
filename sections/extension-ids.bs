@@ -54,7 +54,7 @@ behavior:
     band, defaulting to a freshly generated random value if the
     application does not supply one. Nothing about that default ties it
     to the extension's manifest, package, or signing key, and unlike the
-    other two browsers it is not required to fit any particular character
+    other two browsers it need not fit any particular character
     set.
 
 Whatever this specification settles on has to be satisfiable by all

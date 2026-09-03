@@ -45,7 +45,8 @@ validated using the same [=match pattern=] grammar used for the `host_permission
 
 Which strings are valid entries in `permissions` is implementation-defined: each browser
 recognizes its own set of permission names, and a name outside a given browser's set is not a
-valid entry for that browser.
+valid entry for that browser. An entry in `permissions` or `origins` that is well formed but is
+not a name the user agent recognizes causes the call to fail.
 
 <div class=note>
 As of 2026-09, these sixteen permission names are recognized by Chrome, Firefox and Safari
@@ -72,14 +73,16 @@ A name outside this list is recognized by at most two of the three, so it is not
 </div>
 
 <div class=issue>
-An entry that is well formed but is not a name the browser recognizes
-fails differently in each:
+Should an unrecognized name be signalled by throwing synchronously or by
+rejecting the returned promise?
 
 * Chrome: rejects the returned promise.
 * Firefox: throws synchronously.
 * Safari: throws synchronously for `contains()`, but rejects the promise
     for `request()` and `remove()`.
 
+A synchronous throw escapes a `.catch()` attached to the returned promise, so
+`browser.permissions.contains(bad).then(ok).catch(err)` behaves differently across browsers.
 </div>
 
 <pre class="idl">

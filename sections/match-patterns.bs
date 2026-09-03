@@ -45,20 +45,24 @@ form:
 A pattern's |scheme| is the substring of the match pattern before the
 first `://`.
 
-Issue: Chrome and Safari accept `http`, `https`, `file`, `ftp`, plus
-their own extension scheme, as literal |scheme| values in `matches` /
-`host_permissions`. Firefox additionally accepts `ws`, `wss`, and `data`.
-Chrome additionally accepts `ws`/`wss` for `host_permissions` (but not
-for `content_scripts.matches`) and its own `chrome://` WebUI scheme
-(policy/enterprise contexts only). Safari accepts none of `ws`, `wss`,
-`data`, or a WebUI-equivalent scheme in a match pattern at all.
-
-If |scheme| is `*`, the pattern matches a fixed, implementation-defined
-set of schemes in place of a literal scheme.
+The literal scheme values `http`, `https`, `file`, and `ftp`, plus a browser's own extension
+scheme, are valid |scheme| values in Chrome, Firefox, and Safari alike.
 
 <div class=issue>
-The `*` scheme wildcard does not expand to the same set of schemes in every
-browser:
+Beyond that common set, support diverges. Firefox additionally accepts `ws`, `wss`, and `data`.
+Chrome additionally accepts `ws`/`wss` for `host_permissions` (but not for
+`content_scripts.matches`) and its own `chrome://` WebUI scheme (policy/enterprise contexts
+only). Safari accepts none of `ws`, `wss`, `data`, or a WebUI-equivalent scheme in a match
+pattern at all.
+</div>
+
+If |scheme| is `*`, the pattern matches a fixed, implementation-defined
+set of schemes in place of a literal scheme. That set always includes `http` and `https` in
+Chrome, Firefox, and Safari alike.
+
+<div class=issue>
+Firefox's `*` scheme wildcard additionally covers `ws`/`wss`, which Chrome's and Safari's do
+not:
 
 * Chrome: `http`, `https`
 * Safari: `http`, `https`
@@ -96,7 +100,7 @@ by an explicit fold in the comparison itself. Firefox's host comparison has
 no case-folding call; an intentionally-uppercase literal host in a Firefox
 match pattern therefore does not match a real (lowercase) URL host. If
 the group specifies case-insensitive host matching normatively, this is
-a required behavior change for Firefox, not merely a documentation fix.
+a behavior change Firefox would have to make, not merely a documentation fix.
 
 Issue: Only Chrome canonicalizes a Unicode (non-ASCII) |host| to
 Punycode/ASCII-Compatible-Encoding at parse time. Firefox and Safari do
@@ -178,10 +182,11 @@ but not `https://example.com/foobar` or `https://example.com/foo`
 ## <dfn export>`<all_urls>`</dfn> ## {#all-urls}
 
 The special match pattern `<all_urls>` matches all URLs whose scheme is
-in a permitted set of schemes, regardless of host or path.
+in a permitted set of schemes, regardless of host or path. `http` and `https` are in that set
+in every engine, in every context that defines one.
 
 <div class=issue>
-The permitted scheme set for `<all_urls>` is the largest three-way
+Beyond `http` and `https`, the permitted scheme set for `<all_urls>` is the largest three-way
 divergence in this area, and it is not merely a different literal list;
 the *shape* of the set differs.
 
