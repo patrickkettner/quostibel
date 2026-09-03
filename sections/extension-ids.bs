@@ -1,0 +1,59 @@
+<pre class='metadata'>
+Title: Uniqueness of extension IDs
+Shortname: quostibel-extension-ids
+Level: 1
+Status: w3c/CG-DRAFT
+Group: WECG
+Editor: WECG
+ED: https://patrickkettner.github.io/quostibel/extension-ids.html
+Abstract: Draft of the extension ID uniqueness and derivation section for the WebExtensions specification, validated against Chromium, WebKit and Gecko source.
+Repository: patrickkettner/quostibel
+Markup Shorthands: markdown yes
+</pre>
+
+<!-- Standalone preamble. Remove metadata and link-defaults when splicing into index.bs. -->
+
+<pre class="link-defaults">
+spec:url; type:dfn; text:scheme
+spec:url; type:dfn; for:url; text:host
+spec:url; type:dfn; text:path
+spec:infra; type:dfn; text:user agent
+</pre>
+
+## Uniqueness of extension IDs ## {#uniqueness-of-extension-ids}
+
+An <dfn>extension ID</dfn> is an opaque string that identifies a WebExtension. Every loaded WebExtension has an extension ID.
+
+An extension ID is unique within the scope in which it is used to look up a WebExtension: at minimum, within one [=user agent=] profile. A [=user agent=] must not have two different currently-loaded WebExtensions with the same extension ID in the same profile. Loading a WebExtension whose extension ID matches an already-loaded WebExtension is an update of that WebExtension, not the addition of a second, distinct one.
+
+Issue: User agents diverge sharply on how the extension ID is produced, and this needs a normative resolution rather than just a description of current behavior:
+
+    - Chromium derives the ID deterministically by hashing the extension's packaging public key (the first 16 bytes of the SHA-256 hash of the DER-encoded public key, re-encoded using the 16-letter alphabet `a`-`p` instead of hexadecimal, giving a fixed 32-character lowercase string). An extension loaded unpacked, with no key yet assigned, gets an ID hashed from its filesystem path instead, which is stable across reloads of that same path but changes if the extension is moved or later packed with a key.
+    - Gecko takes the ID directly from the `id` property of the manifest's `browser_specific_settings.gecko` key (or the deprecated `applications.gecko.id`), authored by the developer. The accepted forms are a GUID wrapped in braces (`{8-4-4-4-12 hex digits}`) or an email-like string (`[a-z0-9-._]*@[a-z0-9-._]+`), matched case-insensitively. If the key is omitted and the package is signed, the ID is taken from the signing certificate instead; if the key is omitted, the package is unsigned, and the load is a temporary development load, an ID is generated that is explicitly not stable across restarts.
+    - WebKit does not read any ID from the manifest at all. The identifier is a property the embedding application assigns to the extension out of band, defaulting to a freshly generated random value if the application does not supply one. Nothing about that default ties it to the extension's manifest, package, or signing key, and unlike the other two engines it is not required to fit any particular character set.
+
+    Whatever this specification settles on has to be satisfiable by all three: either a derivation algorithm all engines can adopt, or a deliberately loose definition (an opaque, [=user agent=]-assigned string meeting only a minimum uniqueness and stability bar) that leaves derivation as an implementation detail.
+
+Issue: The accepted character set, length, and case-sensitivity of an extension ID are not aligned across engines and need a decision: exactly 32 characters from `a`-`p` (Chromium), a braced GUID or an email-like string (Gecko), or an unconstrained non-empty string (WebKit). A [=user agent=] that only accepts its own native form cannot load a WebExtension packaged with another engine's form of ID.
+
+<div class="example">
+Depending on the [=user agent=], an extension ID may look like `bmnlcjabdbnaibedpokdopcffdilbkco` (Chromium's derived form), `{daf44bf7-a45e-4450-979c-91cf07434c3a}` or `my-extension@example.org` (Gecko's authored forms), or any other unique string an embedding application assigns.
+</div>
+
+An extension ID must be stable for the lifetime of a given installation of a WebExtension: reloading, restarting the [=user agent=], or restarting the device must not change it. Whether the same extension ID is produced again for a *separate* installation of the same WebExtension source, on the same or a different machine, or when loading the same source both unpacked and packed, is [=extension ID=] derivation, not a requirement.
+
+Issue: Which of the above stability guarantees a [=user agent=] must provide by default is unresolved. Chromium's key-derived ID is stable across every reinstall of the same signed package, on any machine. Gecko's manifest-authored ID is likewise stable across reinstalls, by construction, as long as the manifest is unchanged. WebKit provides no such default: a freshly generated identifier is not guaranteed to survive even a relaunch of the embedding application unless that application explicitly persists and reassigns one before each load.
+
+An [=extension origin=]'s extension-specific host is not necessarily the extension ID.
+
+Issue: Engines diverge on whether the [=extension origin=] host equals the [=extension ID=]:
+
+    - Chromium's [=extension origin=] host is the extension ID directly.
+    - Gecko's [=extension origin=] host is a separate, randomly generated identifier, unrelated to the extension ID, generated once per (profile, extension) pair and persisted for the life of that profile. This is deliberate: it prevents a web page from testing whether a given extension is installed by attempting to load a resource from a URL built from that extension's ID.
+    - WebKit's [=extension origin=] host defaults to the extension ID, but the embedding application may set the two independently, so they are not guaranteed to match.
+
+    A [=user agent=] should not be required to expose the extension ID as the [=extension origin=] host, since doing so forecloses Gecko's anti-fingerprinting design.
+
+The extension ID is available to a [=privileged extension context=] and [=content script context=] of the WebExtension it identifies. An extension may also learn the extension ID of another, cooperating extension through APIs that name it explicitly, such as [`externally_connectable`](https://w3c.github.io/webextensions/specification/#key-externally_connectable).
+
+Issue: Whether, and how, an extension ID is observable from a [=main world=] that is not an [=extension context=] depends on whether the [=user agent=]'s [=extension origin=] host is the extension ID (see above): where it is, a web page that can reach an [=extension origin=] resource (for example, a [=web accessible resource=]) observes the extension ID as that resource's host.
