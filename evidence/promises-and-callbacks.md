@@ -107,7 +107,7 @@ from a per-function (Chrome, Firefox) or per-interface (Safari) declaration, at 
   the attribute (grep confirms 32 of the 37 `.idl` files under
   `Source/WebKit/WebProcess/Extensions/Interfaces/`; the other 5 are `WebExtensionAPIEvent.idl`,
   `WebExtensionAPIPort.idl`, `WebExtensionAPIWebNavigationEvent.idl`,
-  `WebExtensionAPIWebRequestEvent.idl`, `WebExtensionAPIWindowsEvent.idl` — all event-listener or
+  `WebExtensionAPIWebRequestEvent.idl`, `WebExtensionAPIWindowsEvent.idl`: all event-listener or
   message-port interfaces whose methods are `addListener`/`removeListener`/`postMessage`, not
   asynchronous result-bearing methods, so they are not instances of this rule one way or the
   other).
@@ -150,11 +150,11 @@ out to be the opposite: all three converge, including on the “unchecked error�
 
 - **Chrome**: `AsyncResultHandler::ResolveRequest()` sets `runtime.lastError`
   (`last_error->SetError(context, error)`) only `if (set_last_error)`, where `set_last_error =
-  promise_resolver_.IsEmpty() && !error.empty()` — i.e. only for a callback-based request that
+  promise_resolver_.IsEmpty() && !error.empty()`: i.e. only for a callback-based request that
   failed, never for a promise-based one (`api_request_handler.cc:217-222`). It then dispatches to
   `ResolvePromise()`, which calls `resolver->Reject(context, v8_error)` on a non-empty error
   (`api_request_handler.cc:300-306`), or to `CallExtensionCallback()`, which invokes the
-  extension's callback with the ordinary result `args` regardless of whether `error` was set —
+  extension's callback with the ordinary result `args` regardless of whether `error` was set ,
   the error is never passed to the callback as an argument (`api_request_handler.cc:254-262,
   309-320`). After the callback returns, `last_error->ClearError(context, true)` is called with
   `report_if_unchecked = true` (`api_request_handler.cc:266-268`); if a request completes with an
@@ -170,7 +170,7 @@ out to be the opposite: all three converge, including on the “unchecked error�
   \`Unchecked lastError value: ${this.lastError}\`, caller) }`
   (`ExtensionCommon.sys.mjs:828-836`). The promise branch, on rejection, instead calls `reject`
   directly with the error value (`ExtensionCommon.sys.mjs:943` onward, mirroring the resolve path
-  already quoted in section 2 above) — no `lastError` involvement for the promise form.
+  already quoted in section 2 above): no `lastError` involvement for the promise form.
 - **Safari**: `WebExtensionCallbackHandler::reportError()` branches on which kind of handler it
   is: if it wraps a real runtime (`m_runtime` set, i.e. the callback form), it delegates to
   `runtime->reportError(message, *this)`, which sets `m_lastError`, invokes the wrapped callback
@@ -202,11 +202,11 @@ unchecked-access warning all agree across Chrome, Firefox and Safari.
   (`api_request_handler.cc:284-291`); the callback receives that same `args` vector as its
   argument list (`api_request_handler.cc:260-261, 310-320`). A method whose native result would
   need more than one callback argument is not given `returns_async` promise support at all (see
-  section 5) — Chrome has no dual-form method observed where the two forms disagree on shape.
+  section 5): Chrome has no dual-form method observed where the two forms disagree on shape.
 - **Safari**: the generated success path calls the same `WebExtensionCallbackHandler::call()`
   family (0-, 1-, 2-, or 3-argument overloads,
   `Source/WebKit/WebProcess/Extensions/Bindings/JSWebExtensionWrapper.cpp:156-181`) regardless of
-  whether the handler wraps a real callback or a promise's resolve function — the same call site
+  whether the handler wraps a real callback or a promise's resolve function: the same call site
   in each API's generated/hand-written implementation drives both. Every multi-argument `call()`
   usage found (for example `devtools.inspectedWindow.eval()`,
   `Source/WebKit/WebProcess/Extensions/API/Cocoa/
@@ -221,7 +221,7 @@ unchecked-access warning all agree across Chrome, Firefox and Safari.
   caller)` where `args` is the `SpreadArgs` array, invoked so each element becomes a separate
   positional argument (`ExtensionCommon.sys.mjs:893-894`); the promise branch instead does
   `applySafe(resolve, value.length == 1 ? value : [value], caller)`
-  (`ExtensionCommon.sys.mjs:936-937`) — for a `SpreadArgs` of length other than 1, this resolves
+  (`ExtensionCommon.sys.mjs:936-937`): for a `SpreadArgs` of length other than 1, this resolves
   the promise with the array itself as a single value, not spread. A real method uses this:
   `devtools.inspectedWindow.eval()` returns `new SpreadArgs([evalResult.value,
   evalResult.exceptionInfo])` (`browser/components/extensions/parent/
@@ -258,7 +258,7 @@ direction they break the rule; no exception was found in Safari.
   `extensions/common/api/events.json`: the declarative `Event.addRules()`-style methods used by
   `declarativeContent`/`declarativeWebRequest`-style APIs are flagged
   `"does_not_support_promises": "Related custom hooks do not handle promises crbug.com/1520656"`
-  (`events.json:140,179,212`) — an implementation gap tracked in that bug, not a synchronous-
+  (`events.json:140,179,212`): an implementation gap tracked in that bug, not a synchronous-
   return conflict.
 - **Firefox, promise-only**: a schema function is declared `"async": true` rather than `"async":
   "callback"` when it has no parameter whose name matches a callback name; `Schemas.sys.mjs`'s
@@ -290,7 +290,7 @@ direction they break the rule; no exception was found in Safari.
 
 No divergence found anywhere in this document's research beyond what section 1 already reports:
 none of the three engines' generic dual-signature machinery branches on manifest version, and
-none of the exceptions in section 5 are manifest-version-scoped either — `desktop_capture.json`,
+none of the exceptions in section 5 are manifest-version-scoped either: `desktop_capture.json`,
 `context_menus.json`, and `events.json`'s `does_not_support_promises` entries carry no
 `min_manifest_version`/`max_manifest_version` restricting them to one version, and Firefox's
 `"async": true` declarations are a property of the function's schema entry, unconditioned on
