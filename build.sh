@@ -151,3 +151,14 @@ if grep -rln "$EMDASH" . --exclude-dir=.git --exclude-dir=out --exclude-dir=bsve
   grep -rn "$EMDASH" . --exclude-dir=.git --exclude-dir=out --exclude-dir=bsvenv >&2
   exit 1
 fi
+
+# Local dfns must not be shadowed by a same-named term in another spec.
+# A reference that silently resolves to an unrelated specification compiles
+# clean and is wrong, so check the terms this project defines resolve locally.
+for term in subsumes subsumed glob wildcard; do
+  if grep -q "href=\"https://[^\"]*\"[^>]*>$term</a>" out/merged/index.html 2>/dev/null; then
+    echo "FAIL: '$term' resolves to an external spec in the merged build" >&2
+    grep -o "<a[^>]*>$term</a>" out/merged/index.html | head -3 >&2
+    exit 1
+  fi
+done

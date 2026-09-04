@@ -41,8 +41,7 @@ Grammar accepted today:
 * Safari: no grammar at all. Only emptiness is checked, and that does
     not block loading at the engine level.
 
-Tracked at [w3c/webextensions#283](https://github.com/w3c/webextensions/issues/283), open as of
-2026-07-02.
+Tracked at [w3c/webextensions#283](https://github.com/w3c/webextensions/issues/283).
 </div>
 
 ## Key `version_name` ## {#version-handling-key-version_name}

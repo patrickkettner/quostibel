@@ -38,7 +38,7 @@ form:
 <scheme>://<host><path>
 ```
 
-A [=match pattern=] |a| <dfn export>subsumes</dfn> a match pattern |b| if every URL matched by
+A [=match pattern=] |a| <dfn export lt="subsumes|subsumed|subsume">subsumes</dfn> a match pattern |b| if every URL matched by
 |b| is also matched by |a|.
 
 ## Grammar ## {#match-pattern-grammar}

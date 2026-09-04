@@ -247,7 +247,7 @@ When is the temporary grant `activeTab` creates revoked? Chrome, Firefox, and Sa
     action is invoked again for a different tab or the tab/window is
     destroyed.
 
-Tracked at [w3c/webextensions#657](https://github.com/w3c/webextensions/issues/657), open as of 2026-05-02.
+Tracked at [w3c/webextensions#657](https://github.com/w3c/webextensions/issues/657).
 </div>
 
 <div class="example">
