@@ -6,7 +6,7 @@ Built pages: https://patrickkettner.github.io/quostibel/
 
 ## What This Is
 
-Six draft sections for `w3c/webextensions`' `specification/index.bs`, the
+Seven draft sections for `w3c/webextensions`' `specification/index.bs`, the
 WebExtensions specification. Each one is validated by reading the actual
 Chromium, WebKit and Gecko source, not by reading documentation or a vendored
 type package. Every claim in every section carries a file:line citation into
@@ -57,6 +57,7 @@ drafts, meant for someone to read and argue with, not submissions.
 | [`sections/host-permissions.bs`](sections/host-permissions.bs) | Host permissions, restricted URLs, cross-origin fetch, `activeTab` | [`evidence/host-permissions.md`](evidence/host-permissions.md) | The core agrees: one access check gates content scripts, cookies, `webRequest`, and tab URLs in all three. Content-script CORS bypass is gone everywhere under MV3 |
 | [`sections/version-number-handling.bs`](sections/version-number-handling.bs) | `version`/`version_name` keys, parsing, and comparison | [`evidence/version-number-handling.md`](evidence/version-number-handling.md) | Only Chromium validates format. Gecko accepts any string and warns. WebKit checks non-empty only |
 | [`sections/extension-ids.bs`](sections/extension-ids.bs) | Uniqueness and derivation of extension IDs | [`evidence/extension-ids.md`](evidence/extension-ids.md) | Irreconcilable three ways by design: Chromium derives it from a key, Gecko takes it from the manifest, WebKit assigns it out of band |
+| [`sections/promises-and-callbacks.bs`](sections/promises-and-callbacks.bs) | The dual promise/callback calling convention for asynchronous methods: what each form returns, how each reports an error, and which methods support only one | [`evidence/promises-and-callbacks.md`](evidence/promises-and-callbacks.md) | The mechanism and the error path agree fully, including a `runtime.lastError` "unchecked" warning in all three. Chrome and Firefox each carry real, opposite-direction exceptions to the dual form; none found in Safari |
 
 ## The Rest Of It
 
@@ -83,7 +84,7 @@ bsvenv/bin/bikeshed update
 ```
 
 `build.sh` compiles every file in `sections/` on its own, then splices all
-six into a fresh copy of the real `index.bs` (fetched live via `gh api`, so
+seven into a fresh copy of the real `index.bs` (fetched live via `gh api`, so
 `gh` needs to be authenticated) and compiles that too. It reports pass or
 fail per section, plus the merged result, and exits nonzero if anything
 fails. See [`BUILD-NOTES.md`](BUILD-NOTES.md) for what makes a section
@@ -95,10 +96,12 @@ Three content defects, found while getting the sections to compile and left
 alone rather than fixed, because fixing them is an editorial decision, not a
 markup fix:
 
-1. `` `runtime.getManifest()` `` in version-number-handling links to a
+1. `` `runtime.getManifest()` `` in version-number-handling, and
+   `` `runtime.lastError` `` in promises-and-callbacks, both link to a
    section (`extension-runtime`) that doesn't exist anywhere: not in
-   `index.bs`, not in any of the six sections. It reads like it should point
-   at a future `runtime` namespace section that hasn't been drafted yet.
+   `index.bs`, not in any of the seven sections. It reads like it should
+   point at a future `runtime` namespace section that hasn't been drafted
+   yet.
 2. `[=extension version comparison=]` and `[=version comparison=]` in
    version-number-handling don't match the actual dfn name,
    `compare two version strings`. Two mentions that should be links are

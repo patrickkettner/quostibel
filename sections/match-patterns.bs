@@ -38,6 +38,9 @@ form:
 <scheme>://<host><path>
 ```
 
+A [=match pattern=] |a| <dfn export>subsumes</dfn> a match pattern |b| if every URL matched by
+|b| is also matched by |a|.
+
 ## Grammar ## {#match-pattern-grammar}
 
 ### <dfn for="match pattern" id="dfn-match-pattern-scheme">scheme</dfn> ### {#match-pattern-scheme}
@@ -55,8 +58,9 @@ and `wss`, come up in the divergences below. `data` is not a special scheme, whi
 `<all_urls>`.
 
 <div class=issue>
-Beyond that common set, support diverges. Firefox additionally accepts `ws`, `wss`, and `data`.
-Chrome additionally accepts `ws`/`wss` for `host_permissions` (but not for
+Which schemes, beyond `http`, `https`, `file`, `ftp`, and a browser's own [=extension scheme=],
+does a match pattern's scheme component accept? Firefox additionally accepts `ws`, `wss`, and
+`data`. Chrome additionally accepts `ws`/`wss` for `host_permissions` (but not for
 `content_scripts.matches`) and its own `chrome://` WebUI scheme (policy/enterprise contexts
 only). Safari accepts none of `ws`, `wss`, `data`, or a WebUI-equivalent scheme in a match
 pattern at all.
@@ -66,9 +70,8 @@ If |scheme| is `*`, the pattern matches a fixed, implementation-defined
 set of schemes in place of a literal scheme. That set always includes `http` and `https` in
 Chrome, Firefox, and Safari alike.
 
-Issue: Firefox's `*` scheme wildcard covers `ws` and `wss` in addition
-to `http` and `https`. Chrome's and Safari's cover only `http` and
-`https`.
+Issue: Should the `*` scheme wildcard expand to include `ws`/`wss`, matching Firefox, or only
+`http`/`https`, matching Chrome and Safari?
 
 ### <dfn for="match pattern" id="dfn-match-pattern-host">host</dfn> ### {#match-pattern-host}
 
@@ -91,18 +94,22 @@ third slash).
 
 Host comparison is case-insensitive.
 
-Issue: Chrome and Safari match hosts case-insensitively. Firefox does
-not. Firefox stores the pattern's host verbatim and compares it
-byte-for-byte, so `*://EXAMPLE.com/*` matches nothing. Specifying
-case-insensitive host matching is a behavior change for Firefox, not a
-documentation fix.
+<div class=issue>
+Should match pattern host comparison be case-insensitive?
 
-Issue: Only Chrome canonicalizes a Unicode (non-ASCII) |host| to
-Punycode at parse time. Firefox and Safari store the host verbatim. A
-pattern host written with literal Unicode therefore matches nothing in
-those two browsers, because the navigated URL's host is always
-Punycode-encoded, and the author has to write the Punycode form
-themselves.
+Chrome and Safari match hosts case-insensitively. Firefox does not: it stores the pattern's
+host verbatim and compares it byte-for-byte, so `*://EXAMPLE.com/*` matches nothing there.
+Specifying case-insensitive host matching is a behavior change for Firefox, not a documentation
+fix.
+</div>
+
+<div class=issue>
+Should a match pattern's |host| be canonicalized from Unicode to Punycode at parse time?
+
+Only Chrome does this today. Firefox and Safari store the host verbatim, so a pattern host
+written with literal Unicode matches nothing in those two browsers: the navigated URL's host is
+always Punycode-encoded, and the author has to write the Punycode form themselves.
+</div>
 
 A port is never written in |host|; see [[#match-pattern-parsing]] for what
 writing one does to parsing.
@@ -138,29 +145,31 @@ Path matching is case-sensitive in Chrome, Firefox, and Safari (Chrome exposes a
 case-insensitive matching mode in its API, but no call site in the
 browser's own permission or content-script matching code uses it).
 
-Issue: Chrome and Firefox match the path component of a match pattern
-against the URL's [=path=] and [=query=] string together (that is, against
-`pathname + search`). Safari matches it against the [=path=] alone; the
-[=query=] string is excluded. In
-[w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942),
-an Apple engineer stated in April 2024 that a bug was fixed in Safari
-Technology Preview 192, without naming the behavior it concerned, so
-that comment cannot be read either way as a statement about
-query-string matching. The group needs to decide whether the path
-component belongs in the specification as including the query string
-and, if so, what change that means for Safari to match Chrome and
-Firefox.
+<div class=issue>
+Should a match pattern's path component match against the URL's path alone, or against path
+and query together?
 
-Issue: Percent-encoding is handled inconsistently. Chrome decodes
-percent-encoded octets in both the URL and the pattern's |path| before
-comparing (falling back to a raw comparison for byte sequences that
-aren't valid UTF-8). Firefox and Safari perform no decoding at all: a
-pattern containing a literal, unescaped reserved character will not
-match a URL where the user agent encoded that same character, in either
-browser. See also
-[w3c/webextensions#945](https://github.com/w3c/webextensions/issues/945),
-a related but distinct percent-encoding discussion scoped to
-declarativeNetRequest's `urlFilter` syntax rather than match patterns.
+Chrome and Firefox match it against the URL's [=path=] and [=query=] string together (that is,
+against `pathname + search`). Safari matches it against the [=path=] alone; the [=query=]
+string is excluded. In
+[w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942),
+an Apple engineer stated in April 2024 that a bug was fixed in Safari Technology Preview 192,
+without naming the behavior it concerned, so that comment cannot be read either way as a
+statement about query-string matching.
+</div>
+
+<div class=issue>
+Should match pattern comparison decode percent-encoded octets before comparing, as Chrome does,
+or compare byte-for-byte, as Firefox and Safari do?
+
+Chrome decodes percent-encoded octets in both the URL and the pattern's |path| before comparing
+(falling back to a raw comparison for byte sequences that aren't valid UTF-8). Firefox and
+Safari perform no decoding at all: a pattern containing a literal, unescaped reserved character
+will not match a URL where the user agent encoded that same character, in either browser. See
+also [w3c/webextensions#945](https://github.com/w3c/webextensions/issues/945), a related but
+distinct percent-encoding discussion scoped to declarativeNetRequest's `urlFilter` syntax
+rather than match patterns.
+</div>
 
 <div class="example">
 `https://example.com/foo/*` matches `https://example.com/foo/`,
@@ -175,29 +184,30 @@ The special match pattern `<all_urls>` matches all URLs whose [=scheme=] is
 in a permitted set of schemes, regardless of [=url/host=] or [=path=]. `http` and `https` are in that set
 in every engine, in every context that defines one.
 
-<div class=issue>
 Beyond `http` and `https`, the permitted scheme set for `<all_urls>` is the largest three-way
-divergence in this area, and it is not merely a different literal list;
-the *shape* of the set differs.
+divergence in this area, and it is not merely a different literal list: the rows below are the
+URL Standard's six [=special schemes=] plus `data`, and the *shape* of which ones each browser
+includes differs.
 
-* Chrome's set depends on which manifest surface is asking. For
-    `content_scripts.matches`, `<all_urls>` covers `http`, `https`,
-    `file`, `ftp`, and the isolated-web-app UUID scheme (plus `chrome://`
-    WebUI pages, gated behind an experimental flag). For
-    `host_permissions`, the set additionally includes `ws` and `wss`.
-    Neither surface includes `data:` or its own [=extension scheme=].
-* Firefox uses one fixed set for every surface: `http`, `https`, `ws`,
-    `wss`, `file`, `ftp`, and `data`. This is the only one of the three
-    browsers that includes `data:` in `<all_urls>`.
-* Safari's set is the narrowest by far: `http`, `https`, and its own
-    [=extension scheme=]. `file:` is matched only if the caller has
-    separately opted in to allowing file access; by default it is
-    excluded. `ftp`, `ws`, `wss`, and `data` are never included.
+<table class=simple>
+<thead>
+<tr><th>scheme<th>Chrome<th>Firefox<th>Safari
+<tbody>
+<tr><td>`http`<td>yes<td>yes<td>yes
+<tr><td>`https`<td>yes<td>yes<td>yes
+<tr><td>`file`<td>yes<td>yes<td>opt-in
+<tr><td>`ftp`<td>yes<td>yes<td>no
+<tr><td>`ws`, `wss`<td>`host_permissions` only<td>yes<td>no
+<tr><td>`data`<td>no<td>yes<td>no
+</table>
 
-The group needs to choose a portable `<all_urls>` scheme set (or
-explicitly leave `file:` and other non-http(s) schemes as a
-browser-specific opt-in, matching Safari's model, rather than an
-unconditional inclusion as in Firefox's model).
+Each browser's `<all_urls>` also includes that browser's own [=extension scheme=], shared by
+all of its extensions, except Chrome's, which never does.
+
+<div class=issue>
+Should `<all_urls>` cover a single portable scheme set across browsers, or leave `file:` and
+other non-http(s) schemes as a browser-specific opt-in (Safari's model) rather than an
+unconditional inclusion (Firefox's model)?
 </div>
 
 <div class="example">
@@ -262,19 +272,25 @@ patterns need a port component at all.
 
 |pattern| here is either `<all_urls>` or the result of a successful
 [=parse a match pattern|parse=] of a match pattern string; see
-[[#match-pattern-parsing]].
+[[#match-pattern-parsing]]. |surface| identifies which manifest key or API call is making the
+check (for example `content_scripts.matches` or `host_permissions`); see
+[[#match-pattern-scheme]] and [[#all-urls]] for how the permitted and `*`-expansion scheme sets
+vary by |surface|.
 
-To determine whether a [=match pattern=] |pattern| matches a URL |url|:
+To determine whether a [=match pattern=] |pattern| matches a URL |url| for a manifest surface
+|surface|:
 
 1. Let |url record| be the result of [=basic URL parser|parsing=] |url|.
 1. If |pattern| is `<all_urls>`:
     1. If the [=scheme=] of |url record| is in the permitted scheme set
-        for `<all_urls>` (see above), return true.
+        for `<all_urls>` given |surface| (see above), return true.
     1. Otherwise, return false.
-1. If the [=scheme=] of |url record| does not match |pattern|'s
-    [=match pattern/scheme=] (a literal scheme must be equal; `*` must
-    be one of the schemes it expands to for the current context),
-    return false.
+1. If |pattern|'s [=match pattern/scheme=] is `*`:
+    1. If the [=scheme=] of |url record| is not one of the schemes `*` expands to for
+        |surface|, return false.
+1. Otherwise:
+    1. If the [=scheme=] of |url record| is not equal to |pattern|'s [=match pattern/scheme=],
+        return false.
 1. If the [=url/host=] of |url record| does not match |pattern|'s
     [=match pattern/host=], return false.
 1. If |pattern|'s [=match pattern/scheme=] is not `file`, and
@@ -290,21 +306,11 @@ URL; it does not itself define how the URL of a document with an
 [=opaque origin=] is resolved.
 
 <div class=issue>
-Firefox additionally supports a stricter "explicit" matching mode (used for
-`host_permissions`-style checks as opposed to `content_scripts.matches`-
-style checks) in which a pattern that matches subdomains (a leading `*.`
-or bare `*` host) never matches, regardless of the URL. Neither Chrome's
-nor Safari's match-pattern matching code has an equivalent mode, and
-neither engine's permission-checking code has one either: Chrome's
-permission code separates host patterns only by which manifest key
-declared them, not by whether they contain a subdomain wildcard, and
-Safari's closest analogous distinction (a pattern naming a specific host
-versus a pattern that matches every host) is a coarser split that still
-treats a subdomain-wildcard pattern the same as a literal one.
+Should a pattern with a wildcard host be treated differently when granting host permissions
+than when matching content scripts?
 
-The group needs to decide whether this "explicit host" restriction belongs
-in this section as a named concept, or is purely a permission-UI concern
-out of scope for match pattern matching itself.
+Firefox has a stricter mode for host permissions in which a pattern with a wildcard host
+(`*.example.com`, or a bare `*`) never matches. Chrome and Safari have no equivalent.
 </div>
 
 <div class="example">
@@ -328,9 +334,11 @@ A match pattern string that does not [=parse a match pattern|parse=]
 does not match any URL.
 
 <div class=issue>
-What a user agent does beyond that, on encountering such a string in a
-manifest, depends on which manifest key contains it, and differs by
-browser.
+Must the consequence of an unparseable match pattern be uniform across manifest keys, and if
+so, which behavior applies?
+
+What a user agent does beyond dropping the match, on encountering such a string in a manifest,
+depends on which manifest key contains it, and differs by browser today.
 
 For a permission-bearing key (`permissions`, `host_permissions`,
 `optional_permissions`, `optional_host_permissions`), Chrome, Firefox,
@@ -343,8 +351,4 @@ load the extension at all when any one entry fails to parse. Safari
 drops only the unparseable entry (or, if every entry in one content
 script definition fails, that definition) and still loads the
 extension.
-
-The group needs to decide whether the consequence of an unparseable
-match pattern needs to be uniform across keys, and if so, which of the
-above.
 </div>

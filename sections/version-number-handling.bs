@@ -26,7 +26,10 @@ spec:infra; type:dfn; text:user agent
 The value must be a non-empty [=string=].
 
 <div class=issue>
-The accepted grammar differs in each:
+Should this specification require Chrome's strict grammar for `version`, or scope the key to
+the loosest grammar all three already accept without a warning?
+
+The accepted grammar differs today:
 
 * Chrome: 1 to 4 dot-separated integers. No leading zero in the first
     component; a leading zero in a later component is accepted and
@@ -38,9 +41,8 @@ The accepted grammar differs in each:
 * Safari: no grammar at all. Only emptiness is checked, and that does
     not block loading at the engine level.
 
-The specification needs to pick one, or scope `version` to the grammar
-all three already accept without a warning. Tracked at
-[w3c/webextensions#283](https://github.com/w3c/webextensions/issues/283), open as of 2026-07-02.
+Tracked at [w3c/webextensions#283](https://github.com/w3c/webextensions/issues/283), open as of
+2026-07-02.
 </div>
 
 ## Key `version_name` ## {#version-handling-key-version_name}
@@ -51,7 +53,8 @@ as "1.2 beta". It has no effect on [=extension version comparison=] and is
 not required to follow the [=version string=] grammar. The key is
 OPTIONAL, and an implementation MAY ignore it.
 
-Issue: Firefox does not implement `version_name` as a manifest key: no
+<div class=note>
+Firefox does not implement `version_name` as a manifest key: no
 manifest schema property exists for it, and no code path in the
 extension manifest or management APIs ever sets or reads it. This makes
 `version_name` a two-of-three feature: Chrome and Safari support it as
@@ -61,6 +64,7 @@ has stated the omission is deliberate, not an oversight: bugzilla
 RESOLVED WONTFIX, records the decision, reasoning that the version
 string is part of an extension's identity and a customizable display
 string risks confusing users.
+</div>
 
 # Version number handling # {#version-number-handling}
 
@@ -87,16 +91,11 @@ To <dfn>parse a version string</dfn> given |input|:
 </div>
 
 <div class=issue>
-This algorithm follows Chrome's grammar, the strictest of the three.
-Firefox and Safari do not reject a version string that fails it; both
-store the value unchanged.
+Must an implementation reject an unparseable `version`? Is the number of components capped
+(Chrome allows at most 4)? Is each component's value capped (Chrome allows 0 to 4294967295)?
 
-Three questions are open:
-
-* Must an implementation reject an unparseable `version`?
-* Is the number of components capped? Chrome allows at most 4.
-* Is each component's value capped? Chrome allows 0 to 4294967295.
-
+This algorithm follows Chrome's grammar, the strictest of the three. Firefox and Safari do not
+reject a version string that fails it; both store the value unchanged.
 </div>
 
 ## Comparing version strings ## {#version-comparison}
@@ -142,8 +141,11 @@ newer, for two version strings both accept without error.
 </div>
 
 <div class=issue>
-The algorithm above is Chrome's numeric tuple compare, the simplest of
-the three. Firefox and Safari differ:
+Should this specification require one version-comparison algorithm, permit either of the two
+in use today, or leave comparison implementation-defined and unobservable to extensions?
+
+The algorithm above is Chrome's numeric tuple compare, the simplest of the three. Firefox and
+Safari differ:
 
 * Firefox: compares each part as a number followed by a string, so it
     can order pairs Chrome cannot compare at all, such as `1.0a1`
@@ -153,8 +155,6 @@ the three. Firefox and Safari differ:
     returned as an opaque string, and any comparison for update
     purposes happens in the host application.
 
-The specification needs to choose one algorithm, permit both, or leave
-comparison implementation-defined and unobservable to extensions.
 </div>
 
 ## Invalid version strings ## {#invalid-version-strings}
@@ -163,7 +163,10 @@ A [=version string=] that does not [=parse a version string|parse=] is
 invalid.
 
 <div class=issue>
-Implementations disagree on the consequence, including for the specific
+Must an implementation reject an extension whose `version` is invalid, and if so, is the whole
+extension rejected, or only the key?
+
+Implementations disagree on the consequence today, including for the specific
 case of an empty `version`, which the normative requirement above
 ([[#version-handling-key-version]]) already forbids:
 
@@ -187,12 +190,6 @@ case of an empty `version`, which the normative requirement above
 
 In no case examined is an invalid or empty `version` treated as though
 the key were simply absent from the manifest.
-
-Two questions are open:
-
-* Must an implementation reject an extension whose `version` is invalid?
-* If so, is the whole extension rejected, or only the key?
-
 </div>
 
 ## Observability to extensions ## {#version-observability}

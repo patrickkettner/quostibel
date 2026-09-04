@@ -472,6 +472,12 @@ This is the getAll() divergence: all three include required manifest permissions
 but WebKit additionally reports an implicit "all hosts" origin under conditions where Chrome and
 Firefox would report only the origins actually declared/granted.
 
+The synthesized string itself is `*://*/*`, not `<all_urls>`. `allHostsAndSchemesMatchPattern()`
+(`WebExtensionMatchPattern.h:85`) resolves to the pattern constant
+`static constexpr ASCIILiteral allHostsAndSchemesPattern = "*://*/*"_s;`
+(`WebExtensionMatchPattern.cpp:48`, consumed at `:164`), a distinct constant from
+`allURLsMatchPattern()`'s `"<all_urls>"_s` (`:47`, `:159`).
+
 ## 5. `onAdded` / `onRemoved`
 
 ### Firing on browser-UI-driven changes, not just API calls

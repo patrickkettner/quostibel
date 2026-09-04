@@ -9,6 +9,14 @@ Current index.bs text (fetched via `gh api repos/w3c/webextensions/contents/spec
 
 > A glob can be any string. It can contain any number of wildcards where `*` can match zero or more characters and `?` matches exactly one character.
 
+That sentence was added by [w3c/webextensions#542](https://github.com/w3c/webextensions/pull/542),
+"Add content scripts section in specification." The pull request's own body calls the section
+"a first draft," and its author asked reviewers directly, "Would you be able to take a look at
+this one and confirm if it is accurate? This was my best understanding based on bugs and
+documentation in the code." Nobody confirmed it in the PR thread, and no other discussion of
+`?` semantics was found anywhere in the group's record: it was never checked against source,
+not merely wrong.
+
 The "inject a content script" algorithm, line 397-411, currently states this order:
 1. `url` matched against `matches` (else return)
 2. If `include_globs` present, `url` must match a glob in it (else return)

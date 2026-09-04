@@ -27,9 +27,10 @@ An <dfn>extension ID</dfn> is an opaque string that identifies a WebExtension. E
 A [=user agent=] must not have two different currently-loaded WebExtensions with the same extension ID in the same profile. Loading a WebExtension whose extension ID matches an already-loaded WebExtension is an update of that WebExtension, not the addition of a second, distinct one.
 
 <div class=issue>
-Browsers diverge sharply on how the extension ID is produced, and this
-needs a normative resolution rather than just a description of current
-behavior:
+Should this specification define a single extension-ID derivation algorithm every browser can
+adopt, or a deliberately loose, implementation-defined definition?
+
+Chrome, Firefox, and Safari produce the extension ID in three fundamentally different ways:
 
 * Chrome derives the ID deterministically by hashing the extension's
     packaging public key (the first 16 bytes of the SHA-256 hash of the
@@ -57,11 +58,8 @@ behavior:
     other two browsers it need not fit any particular character
     set.
 
-Whatever this specification settles on has to be satisfiable by all
-three: either a derivation algorithm every browser can adopt, or a
-deliberately loose definition (an opaque, [=user agent=]-assigned string
-meeting only a minimum uniqueness and stability bar) that leaves
-derivation as an implementation detail.
+The loose option is an opaque, [=user agent=]-assigned string meeting only a minimum
+uniqueness and stability bar, leaving derivation itself as an implementation detail.
 </div>
 
 The accepted character set, length, and case-sensitivity of an extension ID are implementation-defined.

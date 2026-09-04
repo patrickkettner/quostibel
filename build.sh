@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compile every section under sections/*.bs standalone, then splice all six
+# Compile every section under sections/*.bs standalone, then splice all seven
 # into a fresh copy of the real w3c/webextensions specification/index.bs and
 # compile that too.
 #
@@ -12,7 +12,7 @@
 #     w3c/webextensions on every run (`gh api`), the standalone preamble and
 #     link-defaults block are stripped back out of each section (everything
 #     after the "Standalone preamble" comment, minus the link-defaults pre
-#     block that follows it), and the six resulting bodies are spliced into
+#     block that follows it), and the seven resulting bodies are spliced into
 #     their intended headings with tools/splice_merged.py. A pass here also
 #     means zero fatal messages.
 #
@@ -68,8 +68,9 @@ declare -A ROWDIR=(
   [host-permissions]="4-host-permissions"
   [version-number-handling]="5-version-handling"
   [extension-ids]="6-extension-ids"
+  [promises-and-callbacks]="7-promises-and-callbacks"
 )
-SECTION_ORDER="match-patterns globs permissions-api host-permissions version-number-handling extension-ids"
+SECTION_ORDER="match-patterns globs permissions-api host-permissions version-number-handling extension-ids promises-and-callbacks"
 
 echo "== STANDALONE =="
 standalone_failures=0
@@ -134,7 +135,7 @@ fi
 
 echo
 echo "== SUMMARY =="
-echo "standalone failures: $standalone_failures / 6"
+echo "standalone failures: $standalone_failures / 7"
 echo "merged: $([ "$merged_pass" = true ] && echo PASS || echo FAIL)"
 echo "double-escaping regressions: $([ "$escaping_failures" -eq 0 ] && echo none || echo FOUND)"
 

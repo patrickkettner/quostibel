@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Splice the six webextensions draft.bs rows into a fresh copy of the real
+Splice the seven webextensions draft.bs rows into a fresh copy of the real
 specification/index.bs, producing one document for the MERGED bikeshed
 compile test.
 
@@ -108,6 +108,7 @@ def main():
     row4 = read_lines(f"{rows_dir}/4-host-permissions/draft.bs")
     row5 = read_lines(f"{rows_dir}/5-version-handling/draft.bs")
     row6 = read_lines(f"{rows_dir}/6-extension-ids/draft.bs")
+    row7 = read_lines(f"{rows_dir}/7-promises-and-callbacks/draft.bs")
 
     # --- split row4 into its "Host permissions" portion and its
     # "activeTab" portion, per the draft's own HTML-comment note. ---
@@ -166,7 +167,10 @@ def main():
     # 7. Version number handling <- row5 (reordered)
     doc = replace_section(doc, r'^Version number handling$', row5_reordered)
 
-    # 8. link-defaults: extend the block index.bs already keeps at the
+    # 8. Concepts > Promises and callbacks <- row7
+    doc = replace_section(doc, r'^Promises and callbacks$', row7)
+
+    # 9. link-defaults: extend the block index.bs already keeps at the
     # bottom of the file, rather than adding a second one.
     new_defaults = [
         'spec:url; type:dfn; text:scheme',

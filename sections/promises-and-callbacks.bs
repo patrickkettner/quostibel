@@ -1,0 +1,123 @@
+<pre class='metadata'>
+Title: Promises and callbacks
+Shortname: quostibel-promises-and-callbacks
+Level: 1
+Status: DREAM
+Editor: Patrick Kettner
+ED: https://patrickkettner.github.io/quostibel/promises-and-callbacks.html
+Abstract: This specification defines the dual promise/callback calling convention shared by asynchronous WebExtension API methods, and how each form reports its result and its errors.
+Repository: patrickkettner/quostibel
+Markup Shorthands: markdown yes
+Complain About: accidental-2119 on
+</pre>
+
+<!-- Standalone preamble. Remove metadata and link-defaults when splicing into index.bs. -->
+
+<pre class="link-defaults">
+spec:infra; type:dfn; text:user agent
+</pre>
+
+## Promises and callbacks ## {#promises-and-callbacks}
+
+An asynchronous method defined by this specification accepts an optional callback function as
+its last argument, in addition to the method's own parameters. Calling the method with that
+callback present uses the <dfn>callback form</dfn>: the [=user agent=] invokes the callback with
+the method's result once it is available, and the method call itself returns `undefined`.
+Calling the method without a trailing callback uses the <dfn>promise form</dfn>: the method
+returns a promise that resolves with that same result, and no callback is invoked. A given call
+uses one form or the other; supplying a callback does not also produce a usable promise, and
+omitting one does not also invoke a callback. This holds independently of whether the extension's
+manifest declares Manifest V2 or Manifest V3: neither form is restricted to one manifest version.
+
+<div class="example">
+`permissions.contains({permissions: ['tabs']})` returns a promise that resolves with a boolean.
+`permissions.contains({permissions: ['tabs']}, hasTabs => { ... })` instead invokes the callback
+with that boolean and returns `undefined`.
+</div>
+
+### Result value ### {#promises-and-callbacks-result}
+
+The callback is invoked with the value the promise would otherwise have resolved with, in the
+same argument shape: a method whose promise resolves with a single value invokes its callback
+with that value as its sole argument, and a method whose promise resolves with `undefined`
+invokes its callback with no arguments.
+
+<div class=issue>
+Does a method's callback ever receive more arguments than its promise resolves with?
+
+* Chrome and Safari: not in any case found. A method whose result would need more than one
+    callback argument is defined without a promise form at all instead (see
+    [[#promises-and-callbacks-one-form-only]]), rather than giving the two forms different
+    shapes.
+* Firefox: yes, for at least one method. `devtools.inspectedWindow.eval()`'s callback is invoked
+    with two positional arguments (a result and an exception-info object), while its promise
+    resolves with a single array value bundling the same two values.
+
+Whether a method may be defined this way, with the callback and promise forms disagreeing on
+argument shape, or whether the two are always expected to agree, is unresolved.
+</div>
+
+### Errors ### {#promises-and-callbacks-errors}
+
+An asynchronous method that fails communicates the failure differently depending on the form
+used. In the [=promise form=], the returned promise rejects with the error. In the [=callback
+form=], the callback is invoked the same as it would be on success, with no error argument
+added; the error is instead exposed through
+[`runtime.lastError`](https://w3c.github.io/webextensions/specification/#extension-runtime) for
+the duration of that one callback invocation, and cleared once the callback returns. A callback
+that does not read `runtime.lastError` when it is set causes a warning to be logged.
+
+<div class="example">
+```js
+someNamespace.someMethod(argument, result => {
+  if (browser.runtime.lastError) {
+    // handle the error
+  }
+});
+```
+reports a failure the same way `someNamespace.someMethod(argument)` reports one by rejecting the
+promise it returns, just through `runtime.lastError` instead of a `catch`.
+</div>
+
+### Methods that support only one form ### {#promises-and-callbacks-one-form-only}
+
+Not every asynchronous method supports both forms. Existing implementations already diverge from
+the general rule above, in opposite directions:
+
+<table class="simple">
+<thead>
+<tr><th></th><th>Chrome</th><th>Firefox</th><th>Safari</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>A method supporting only the callback form</td>
+<td>Exists, where the method already has a synchronous return value of its own that a promise
+would collide with</td>
+<td>None found</td>
+<td>None found</td>
+</tr>
+<tr>
+<td>A method supporting only the promise form</td>
+<td>None found</td>
+<td>Exists, and is not rare: no callback parameter is defined for the method at all</td>
+<td>None found</td>
+</tr>
+</tbody>
+</table>
+
+<div class="example">
+Chrome's `contextMenus.create()` supports only the callback form: it already returns the newly
+created item's ID synchronously, and cannot also return a promise. Several Firefox methods, such
+as `action.openPopup()` and `contentScripts.register()`, support only the promise form: no
+callback parameter exists for them at all.
+</div>
+
+<div class=issue>
+Does this specification require every asynchronous method it defines to support both forms, or
+does it need to leave room for a method that supports only one?
+
+Chrome's and Firefox's existing exceptions above are not accidents of one method each: Chrome's
+callback-only methods are ones that predate promise support and already return a value
+synchronously, and Firefox has a substantial number of promise-only methods across many
+namespaces. No exception of either kind was found in Safari.
+</div>
