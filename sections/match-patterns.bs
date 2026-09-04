@@ -151,19 +151,18 @@ Path matching is case-sensitive in Chrome, Firefox, and Safari (Chrome exposes a
 case-insensitive matching mode in its API, but no call site in the
 browser's own permission or content-script matching code uses it).
 
-Issue: The path component of a match pattern is matched against the
-URL's path and query string together (that is, against `pathname +
-search`) in Chrome and Firefox. A WebKit engineer commented in
-[w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942)
-(see also [WebKit bug 273069](https://bugs.webkit.org/show_bug.cgi?id=273069))
-that Safari Technology Preview 192 aligned this behavior with Chrome and
-Firefox. The WebKit engine source available for this specification does
-not show that alignment: its match-pattern path matching reads only the
-URL's path, with the query string excluded. Whether that is because the
-source available here predates Safari Technology Preview 192, or the fix
-described in the comment lives somewhere this source does not cover, is
-not established. Treat Safari's alignment on this point as unconfirmed
-rather than resolved in practice; #580 remains open.
+Issue: Chrome and Firefox match the path component of a match pattern
+against the URL's path and query string together (that is, against
+`pathname + search`). Safari matches it against the path alone; the
+query string is excluded. In
+[w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942),
+an Apple engineer stated in April 2024 that a bug was fixed in Safari
+Technology Preview 192, without naming the behavior it concerned, so
+that comment cannot be read either way as a statement about
+query-string matching. The group needs to decide whether the path
+component belongs in the specification as including the query string
+and, if so, what change that means for Safari to match Chrome and
+Firefox.
 
 Issue: Percent-encoding is handled inconsistently. Chrome decodes
 percent-encoded octets in both the URL and the pattern's |path| before

@@ -231,7 +231,9 @@ read only, not built.
     pattern tests, e.g. `WKWebExtensionMatchPattern.mm:295-296,398-400`
     (`*://*/foo?bar*`), never as a wildcard.
 - Query string: included in what gets matched against the path pattern
-  in Chromium and Gecko, but appears to be excluded in WebKit.
+  in Chromium and Gecko, excluded in WebKit. Confirmed directly from
+  source in all three engines; see item 9 below for the full trace
+  (accessor separation, not an inferred gap).
   - Chromium: `MatchesURL` uses `GURL::PathForRequest()`
     (`url_pattern.cc:462`), documented as "the path, parameter, and query
     portions of the URL" (`url/gurl.h:380-382`) -- i.e. path + query,
@@ -246,14 +248,13 @@ read only, not built.
     (`UserContentURLPattern.h:77`) using only `WTF::URL::path()`
     (`WTF/wtf/URL.h:155`), a distinct accessor from `query()`
     (`WTF/wtf/URL.h:157`). No call to `query()` appears anywhere in
-    `UserContentURLPattern.cpp`. This means a WebKit match pattern's path
-    component is compared against the URL's path only, not path+query.
-    Not confirmed by a passing/failing test with a literal `?` query
-    separator in this file (the closest tests,
-    `WKWebExtensionMatchPattern.mm:398-400`, use a percent-encoded `%3F`
-    that is part of the path itself, not an actual query separator); this
-    conclusion is drawn from the source (which accessor is called), not
-    from an executed test, and is flagged as such in the draft.
+    `UserContentURLPattern.cpp`. `URL::path()` and `URL::query()` are
+    mutually exclusive substrings by construction: `path()` ends at
+    `m_pathEnd`, `query()` begins at `m_pathEnd + 1`
+    (`WTF/wtf/URL.cpp:403-416`). A WebKit match pattern's path component
+    is therefore compared against the URL's path only, never path+query,
+    as a matter of which accessor the code calls, independent of any
+    single test case.
 - Percent-encoding: Chromium unescapes both the tested path and the
   pattern's raw path before comparing, trying both the unescaped-UTF8 and
   raw forms (`url_pattern.cc:590-684`, tests
@@ -570,19 +571,26 @@ algorithm, and must not contradict it.
      (`Source/WTF/wtf/URL.cpp:403-416`) -- mutually exclusive spans by
      construction. So in this source, WebKit's match-pattern path
      matching reads only the path and does **not** include the query
-     string. This directly contradicts the "Safari aligned as of STP 192"
-     claim from the WebKit engineer's comment on
-     [w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942):
-     either the STP 192 fix is not present in the WebKit tree read for
-     this task (checked-out branch `webextension-idl-declarations`, tip
-     commit dated 2026-08-15; `git log` on `UserContentURLPattern.cpp`/`.h`
-     shows only a single, unrelated tooling commit touching those files,
-     which is consistent with a shallow or partial history and does not
-     establish the file's real age), or the change described in the
-     comment lives in code this task did not examine. Neither is
-     established from this tree; the source read here shows exclusion,
-     not inclusion, and that is reported as what was found, not as proof
-     the STP 192 claim is false.
+     string. This is settled from the code itself, independent of any
+     single test case: `matchesPath` never calls `query()`, and the two
+     accessors cannot overlap.
+
+     A prior draft of this document cited
+     [w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942)
+     as evidence that Safari had aligned with Chrome and Firefox on this
+     point. That comment, in full, reads: "@carlosjeurissen That bug is
+     no longer an issue in WebKit and Safari Technology Preview 192." It
+     is by an Apple engineer (Timothy Hatcher), dated 2024-04-22, and it
+     never names the query-string behavior; which bug it refers to
+     depends on the preceding comment in a thread that is actually about
+     a different, separate proposal (`matchesPattern`). Reading it as a
+     statement about query-string matching was an inference the comment
+     does not support, not a misreading of something the comment said.
+     The source read here (checked-out branch
+     `webextension-idl-declarations`, tip commit dated 2026-08-15) shows
+     exclusion. Whether that reflects the current shipping engine, or
+     whether this tree is stale, is not addressed by that comment either
+     way and remains open.
 10. IPv6 bracket storage -- Chromium and WebKit keep the brackets in
     the stored host; Gecko strips them. Not expected to be
     externally observable, noted for completeness only, not drafted as

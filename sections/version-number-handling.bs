@@ -51,13 +51,16 @@ as "1.2 beta". It has no effect on [=extension version comparison=] and is
 not required to follow the [=version string=] grammar. The key is
 OPTIONAL, and an implementation MAY ignore it.
 
-Issue: Firefox has decided not to implement `version_name`: bugzilla
-[1380219](https://bugzilla.mozilla.org/show_bug.cgi?id=1380219), RESOLVED WONTFIX 2026-09-03. Rob
-Wu: "we decided to not implement version_name," reasoning that the version
+Issue: Firefox does not implement `version_name` as a manifest key: no
+manifest schema property exists for it, and no code path in the
+extension manifest or management APIs ever sets or reads it. This makes
+`version_name` a two-of-three feature: Chrome and Safari support it as
+display text that falls back to `version` when absent or empty. Firefox
+has stated the omission is deliberate, not an oversight: bugzilla
+[1380219](https://bugzilla.mozilla.org/show_bug.cgi?id=1380219),
+RESOLVED WONTFIX, records the decision, reasoning that the version
 string is part of an extension's identity and a customizable display
-string risks confusing users. This makes `version_name` a two-of-three
-feature: Chrome and Safari support it as display text that falls back to
-`version` when absent or empty.
+string risks confusing users.
 
 # Version number handling # {#version-number-handling}
 
