@@ -194,17 +194,11 @@ rather than markup bugs. Left alone, per the task's rules.
    compiles clean, but the fragment it points at does not exist on the
    published page today either. This is a real content gap, not a markup
    fix waiting to happen.
-2. **`[=extension version comparison=]` and `[=version comparison=]` in
-   version-number-handling don't match its own `<dfn>compare two version
-   strings</dfn>`.** Both are plain naming mismatches within the same
-   section: the dfn is named differently than every place that tries to
-   link to it. Non-fatal (bikeshed just can't find a same-doc dfn and
-   reports a link error), so it doesn't block either build, but it means
-   those two mentions are unlinked prose rather than links to the algorithm
-   they're clearly referring to.
-3. **`[=web accessible resource=]` in extension-ids is never defined
-   anywhere.** index.bs has an empty `# Web accessible resources` heading
-   but no `<dfn>`. Non-fatal, same reason as #2.
+
+Two further defects listed here previously have since been resolved:
+the version-comparison references now link to the `compare two version
+strings` algorithm, and `web accessible resource` no longer appears in
+any section, so it no longer depends on a definition that does not exist.
 
 Resolved since: the WebIDL `interface Permissions` was renamed to lowercase
 `interface permissions` (the dictionary keeps `Permissions`), and the four

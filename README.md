@@ -92,22 +92,14 @@ compile on its own when the real `index.bs` doesn't, and why.
 
 ## Open Items
 
-Three content defects, found while getting the sections to compile and left
-alone rather than fixed, because fixing them is an editorial decision, not a
-markup fix:
+One content defect remains, left alone because fixing it is an editorial
+decision rather than a markup fix:
 
 1. `` `runtime.getManifest()` `` in version-number-handling, and
    `` `runtime.lastError` `` in promises-and-callbacks, both link to a
-   section (`extension-runtime`) that doesn't exist anywhere: not in
-   `index.bs`, not in any of the seven sections. It reads like it should
-   point at a future `runtime` namespace section that hasn't been drafted
-   yet.
-2. `[=extension version comparison=]` and `[=version comparison=]` in
-   version-number-handling don't match the actual dfn name,
-   `compare two version strings`. Two mentions that should be links are
-   unlinked prose instead.
-3. `[=web accessible resource=]` in extension-ids is never defined anywhere.
-   `index.bs` has an empty "Web accessible resources" heading and no dfn.
+   section (`extension-runtime`) that exists nowhere: not in `index.bs`,
+   not in any of the seven sections. Both want a `runtime` namespace
+   section that has not been drafted.
 
 Beyond that: a later pass closed out the claims that were previously marked
 undetermined, either by tracing further than the original three files per
