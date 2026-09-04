@@ -47,7 +47,7 @@ and by the `browser` APIs for at least:
     unless the extension also has the `tabs` permission.
 * Applying a declarativeNetRequest rule that modifies or redirects a
     matched request (`modifyHeaders`, `redirect`); a rule that only blocks
-    or upgrades a request's scheme (`block`, `upgradeScheme`) does not
+    or upgrades a request's [=scheme=] (`block`, `upgradeScheme`) does not
     require host access for the matched URL. Modifying or redirecting a
     request can be used to relax cross-origin protections (for example via
     CORS or CSP response headers) or otherwise affect content the

@@ -85,22 +85,22 @@ Must an extension ID survive more than the installation that created it?
 
 </div>
 
-An [=extension origin=]'s extension-specific host is not necessarily the extension ID.
+An [=extension origin=]'s extension-specific [=host=] is not necessarily the extension ID.
 
 <div class=issue>
-Must the [=extension origin=] host be the [=extension ID=]?
+Must the [=extension origin=] [=host=] be the [=extension ID=]?
 
-* Chrome's [=extension origin=] host is the extension ID directly.
-* Firefox's [=extension origin=] host is a separate, randomly generated
+* Chrome's [=extension origin=] [=host=] is the extension ID directly.
+* Firefox's [=extension origin=] [=host=] is a separate, randomly generated
     identifier, unrelated to the extension ID, generated once per
     (profile, extension) pair and persisted for the life of that
     profile. This is deliberate, to avoid exactly the observability the
     general rule below describes.
-* Safari's [=extension origin=] host defaults to the extension ID, but
+* Safari's [=extension origin=] [=host=] defaults to the extension ID, but
     the embedding application may set the two independently, so they are
     not guaranteed to match.
 
-Exposing the extension ID as the [=extension origin=] host is not
+Exposing the extension ID as the [=extension origin=] [=host=] is not
 necessary, and doing so forecloses Firefox's anti-fingerprinting design.
 This bears directly on how observable the
 extension ID is from a web page, including through a
@@ -116,7 +116,7 @@ reached as of the newest minutes checked.
 
 The extension ID is available to a [=privileged extension context=] and [=content script context=] of the WebExtension it identifies. An extension may also learn the extension ID of another, cooperating extension through APIs that name it explicitly, such as [`externally_connectable`](https://w3c.github.io/webextensions/specification/#key-externally_connectable).
 
-Where a [=user agent=]'s [=extension origin=] host is the [=extension
+Where a [=user agent=]'s [=extension origin=] [=host=] is the [=extension
 ID=], a web page that can load a resource from that origin, such as a
 [=web accessible resource=], observes the extension ID as that
-resource's host.
+resource's [=host=].

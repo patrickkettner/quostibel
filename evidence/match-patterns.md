@@ -640,3 +640,86 @@ into the files that do:
   detection logic in their match/domain-comparison functions, so neither
   restricts subdomain-wildcard matching against an IP-literal host the
   way Chromium does.
+
+## 9. Consequence of an unparseable match pattern in a manifest
+
+Distinct from grammar validity (section 2 above): what happens when a match
+pattern string in a real manifest fails to parse at all. This depends on
+which manifest key holds the string, in all three engines.
+
+### `content_scripts[].matches` / `exclude_matches`
+
+- Chromium: hard failure, whole extension fails to load. `ParseMatchPatterns`
+  (`extensions/common/utils/content_script_utils.cc:259-308`) returns `false`
+  the moment any one `matches` or `exclude_matches` entry fails
+  `URLPattern::Parse`, building an error via `GetInvalidMatchError`
+  (`content_script_utils.cc:229-243`, `176-199`). That `false` propagates
+  through `CreateUserScript` (`content_scripts_handler.cc:121`, `return
+  nullptr`) into `ContentScriptsHandler::Parse`
+  (`content_scripts_handler.cc:222`, `return false; // Failed to parse
+  script context definition.`), which is a manifest-handler failure --
+  extension load is aborted.
+- Gecko: hard failure, whole extension fails to load. The `ContentScript`
+  schema's `matches` property (`schemas/manifest.json:790-796`) has no
+  `"onError": "warn"` on its `items`, unlike every permission-bearing key
+  (see below). `ArrayType.normalize`
+  (`toolkit/components/extensions/Schemas.sys.mjs:2576-2588`) checks
+  `this.onError`: when it is not `"warn"` and not `"ignore"` (the default,
+  `null`), a single failing element causes `return element;` -- the error
+  propagates out of the array, out of the `content_scripts` entry, up to the
+  top-level manifest normalize. `parseManifest()`
+  (`toolkit/components/extensions/Extension.sys.mjs:1849-1854`) checks
+  `normalized.error` and calls `this.manifestError(normalized.error); return
+  null;` -- the extension does not load.
+- WebKit: soft failure, extension still loads. In the content-script-parsing
+  lambda (`Source/WebKit/UIProcess/Extensions/WebExtension.cpp:1401-1421`),
+  each string in `matches` is passed to
+  `WebExtensionMatchPattern::getOrCreate`; a string that fails to parse
+  returns null and is silently skipped (`:1412-1416`, no `continue`-less
+  error). Only if `includeMatchPatterns` ends up empty after the whole array
+  is processed does the code call `recordError(...)` and `return;`
+  (`:1418-1421`), which skips just that one content-script definition, not
+  the whole extension. `recordError`
+  (`Source/WebKit/UIProcess/Extensions/Cocoa/WebExtensionCocoa.mm:281-292`)
+  only appends to `m_errors` (exposed via the `.errors` property) and logs;
+  it never aborts manifest parsing or extension load.
+
+### `permissions` / `host_permissions` / `optional_permissions` /
+`optional_host_permissions`
+
+- Chromium: soft failure, extension still loads. `ParseHostPermissions`
+  (`extensions/common/manifest_handlers/permissions_parser.cc:120-201`)
+  parses each string with `URLPattern::Parse`; on success it proceeds
+  (`:148-190`), and on failure (or an unrecognized permission name) it calls
+  `extension->AddInstallWarning(...)` with `kPatternMalformed` (MV3) or
+  `kPermissionUnknownOrMalformed` (MV2) (`:195-201`) and moves on to the next
+  entry -- an install warning, not a load failure.
+- Gecko: soft failure, extension still loads. `permissions`
+  (`schemas/manifest.json:268-286`), `host_permissions`
+  (`:297-306`), `optional_host_permissions` (`:308-317`), and
+  `optional_permissions` (`:319-...`) all set `"onError": "warn"` on their
+  `items` (confirmed at lines 277, 285, 302, 313, 323). Per `ArrayType.normalize`
+  (`Schemas.sys.mjs:2582-2583`), `onError == "warn"` makes a failing element
+  call `context.logWarning(...)` and `continue` -- the bad entry is dropped,
+  the rest of the array is kept, and the manifest as a whole still passes
+  normalization.
+- WebKit: soft failure, extension still loads, and unlike Chromium/Gecko no
+  warning is recorded at all. `populatePermissionsPropertiesIfNeeded`
+  (`Source/WebKit/UIProcess/Extensions/WebExtension.cpp:1764-1845`) calls
+  `WebExtensionMatchPattern::getOrCreate` for each `permissions` /
+  `host_permissions` / `optional_permissions` / `optional_host_permissions`
+  string; on failure it returns null, the `if (RefPtr matchPattern = ...)`
+  body is simply not entered, and the loop continues to the next string with
+  no call to `recordError` anywhere in this function.
+
+### Summary
+
+All three engines agree, for the permission-bearing keys: an unparseable
+entry is dropped and the extension still loads (Chromium and Gecko warn,
+WebKit does not). For `content_scripts.matches`/`exclude_matches`,
+Chromium and Gecko instead fail the whole extension load; WebKit drops only
+the unparseable pattern (or, if a content-script definition's `matches` ends
+up empty, that one definition) and still loads the extension. The
+common ground across every case examined: an unparseable pattern is never
+treated as though it matched anything -- it is dropped, or its container is
+dropped, or the whole load is aborted, but it never contributes a match.

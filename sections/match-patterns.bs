@@ -16,10 +16,12 @@ Complain About: accidental-2119 on
 
 <pre class="link-defaults">
 spec:url; type:dfn; text:scheme
+spec:url; type:dfn; text:special scheme
 spec:url; type:dfn; for:url; text:host
 spec:url; type:dfn; text:path
 spec:url; type:dfn; text:query
 spec:url; type:dfn; text:fragment
+spec:url; type:dfn; for:url; text:port
 spec:url; type:dfn; text:URL record
 spec:html; type:dfn; text:opaque origin
 spec:infra; type:dfn; text:user agent
@@ -38,15 +40,19 @@ form:
 
 ## Grammar ## {#match-pattern-grammar}
 
-### Scheme ### {#match-pattern-scheme}
+### <dfn for="match pattern" id="dfn-match-pattern-scheme">scheme</dfn> ### {#match-pattern-scheme}
 
 |scheme| is one of a fixed list of literal scheme names, or `*`.
 
 A pattern's |scheme| is the substring of the match pattern before the
 first `://`.
 
-The literal scheme values `http`, `https`, `file`, and `ftp`, plus a browser's own extension
-scheme, are valid |scheme| values in Chrome, Firefox, and Safari alike.
+The literal scheme values `http`, `https`, `file`, and `ftp`, plus a browser's own [=extension
+scheme=], are valid |scheme| values in Chrome, Firefox, and Safari alike. `http`, `https`,
+`file`, and `ftp` are four of the URL Standard's six [=special schemes=]; the other two, `ws`
+and `wss`, come up in the divergences below. `data` is not a special scheme, which matters for
+[[#all-urls]]: Firefox is the only one of the three browsers that includes `data` in
+`<all_urls>`.
 
 <div class=issue>
 Beyond that common set, support diverges. Firefox additionally accepts `ws`, `wss`, and `data`.
@@ -60,17 +66,11 @@ If |scheme| is `*`, the pattern matches a fixed, implementation-defined
 set of schemes in place of a literal scheme. That set always includes `http` and `https` in
 Chrome, Firefox, and Safari alike.
 
-<div class=issue>
-Firefox's `*` scheme wildcard additionally covers `ws`/`wss`, which Chrome's and Safari's do
-not:
+Issue: Firefox's `*` scheme wildcard covers `ws` and `wss` in addition
+to `http` and `https`. Chrome's and Safari's cover only `http` and
+`https`.
 
-* Chrome: `http`, `https`
-* Safari: `http`, `https`
-* Firefox: `http`, `https`, `ws`, `wss`
-
-</div>
-
-### Host ### {#match-pattern-host}
+### <dfn for="match pattern" id="dfn-match-pattern-host">host</dfn> ### {#match-pattern-host}
 
 |host| is one of:
 
@@ -80,8 +80,9 @@ not:
 * a literal domain or IP-address literal (containing no `*` or `/`),
     matching only that exact host.
 
-A `*` may not appear anywhere else in |host|; a pattern containing one is
-invalid.
+Those are the only shapes |host| takes when it contains a `*` at all; see
+[[#match-pattern-parsing]] for what a `*` in any other position does to
+parsing.
 
 When |scheme| is `file`, |host| is omitted (the pattern has the form
 `file://<path>` or `file:///<path>`, with `<path>` beginning at the third
@@ -90,46 +91,26 @@ third slash).
 
 Host comparison is case-insensitive.
 
-Issue: Whether host comparison is *by design* case-insensitive differs
-by browser, though the observable result is close. Safari folds ASCII
-case explicitly when comparing hosts. Chrome's comparison is a plain
-byte comparison, but both the pattern's host and the URL's host are
-independently canonicalized to lowercase before the comparison runs, so
-it is case-insensitive as a side effect of canonicalization rather than
-by an explicit fold in the comparison itself. Firefox's host comparison has
-no case-folding call; an intentionally-uppercase literal host in a Firefox
-match pattern therefore does not match a real (lowercase) URL host. If
-the group specifies case-insensitive host matching normatively, this is
-a behavior change Firefox would have to make, not merely a documentation fix.
+Issue: Chrome and Safari match hosts case-insensitively. Firefox does
+not. Firefox stores the pattern's host verbatim and compares it
+byte-for-byte, so `*://EXAMPLE.com/*` matches nothing. Specifying
+case-insensitive host matching is a behavior change for Firefox, not a
+documentation fix.
 
 Issue: Only Chrome canonicalizes a Unicode (non-ASCII) |host| to
-Punycode/ASCII-Compatible-Encoding at parse time. Firefox and Safari do
-not. A match pattern host written with literal Unicode characters will
-therefore fail to match the corresponding navigated URL (whose host a
-user agent always Punycode-encodes) in Firefox and Safari, unless the
-extension author writes the Punycode form themselves.
+Punycode at parse time. Firefox and Safari store the host verbatim. A
+pattern host written with literal Unicode therefore matches nothing in
+those two browsers, because the navigated URL's host is always
+Punycode-encoded, and the author has to write the Punycode form
+themselves.
 
-A port is never written in |host|.
+A port is never written in |host|; see [[#match-pattern-parsing]] for what
+writing one does to parsing.
 
-<div class=issue>
-The browsers disagree sharply on what happens if an author writes
-one anyway (e.g. `http://example.com:8080/*`):
-
-* Chrome accepts a `<host>:<port>` form as a distinct, real grammar
-    component: the pattern then matches only URLs on that exact port, and
-    omitting the port (the common case) matches any port.
-* Firefox has no port grammar at all: the `:8080` text is silently absorbed
-    into the literal host string, which then can never match any real
-    (portless) host, so the pattern becomes permanently unmatchable
-    without any parse error.
-* Safari explicitly rejects any pattern containing port syntax in the
-    host as invalid at parse time.
-
-The group needs to decide whether match patterns support a port
-component at all and, if not, whether writing one is treated as a parse
-error (Safari's behavior) or ignored, rather than silently unmatchable
-(current Firefox behavior).
-</div>
+Issue: Does a match pattern need a port component at all? Chrome's
+grammar has one: a literal `<host>:<port>` matches only that port, and
+omitting the port (the common case) matches any port. Safari's and
+Firefox's grammars have none.
 
 <div class="example">
 `https://*.example.com/*` matches `https://example.com/`,
@@ -137,10 +118,16 @@ error (Safari's behavior) or ignored, rather than silently unmatchable
 `https://notexample.com/`.
 </div>
 
-### Path ### {#match-pattern-path}
+### <dfn for="match pattern" id="dfn-match-pattern-path">path</dfn> ### {#match-pattern-path}
 
-|path| begins with `/` and is required; a pattern with no |path| (not
-even a bare `/`) is invalid.
+|path| begins with `/`; see [[#match-pattern-parsing]] for what a
+pattern with no |path| does to parsing.
+
+<div class="example">
+`http://example.com/` has a |path| of `/` and is a valid match pattern.
+`http://example.com`, with no trailing slash and therefore no |path| at
+all, [=parse a match pattern|fails to parse=].
+</div>
 
 |path| may contain any number of `*` characters, each matching zero or
 more characters. No other character in |path| has special meaning; in
@@ -152,9 +139,9 @@ case-insensitive matching mode in its API, but no call site in the
 browser's own permission or content-script matching code uses it).
 
 Issue: Chrome and Firefox match the path component of a match pattern
-against the URL's path and query string together (that is, against
-`pathname + search`). Safari matches it against the path alone; the
-query string is excluded. In
+against the URL's [=path=] and [=query=] string together (that is, against
+`pathname + search`). Safari matches it against the [=path=] alone; the
+[=query=] string is excluded. In
 [w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942),
 an Apple engineer stated in April 2024 that a bug was fixed in Safari
 Technology Preview 192, without naming the behavior it concerned, so
@@ -184,8 +171,8 @@ but not `https://example.com/foobar` or `https://example.com/foo`
 
 ## <dfn export>`<all_urls>`</dfn> ## {#all-urls}
 
-The special match pattern `<all_urls>` matches all URLs whose scheme is
-in a permitted set of schemes, regardless of host or path. `http` and `https` are in that set
+The special match pattern `<all_urls>` matches all URLs whose [=scheme=] is
+in a permitted set of schemes, regardless of [=url/host=] or [=path=]. `http` and `https` are in that set
 in every engine, in every context that defines one.
 
 <div class=issue>
@@ -198,12 +185,12 @@ the *shape* of the set differs.
     `file`, `ftp`, and the isolated-web-app UUID scheme (plus `chrome://`
     WebUI pages, gated behind an experimental flag). For
     `host_permissions`, the set additionally includes `ws` and `wss`.
-    Neither surface includes `data:` or the extension's own scheme.
+    Neither surface includes `data:` or its own [=extension scheme=].
 * Firefox uses one fixed set for every surface: `http`, `https`, `ws`,
     `wss`, `file`, `ftp`, and `data`. This is the only one of the three
     browsers that includes `data:` in `<all_urls>`.
-* Safari's set is the narrowest by far: `http`, `https`, and the
-    extension's own scheme. `file:` is matched only if the caller has
+* Safari's set is the narrowest by far: `http`, `https`, and its own
+    [=extension scheme=]. `file:` is matched only if the caller has
     separately opted in to allowing file access; by default it is
     excluded. `ftp`, `ws`, `wss`, and `data` are never included.
 
@@ -227,7 +214,55 @@ Given a `content_scripts.matches` list of `["<all_urls>"]`:
 </table>
 </div>
 
+## Parsing a match pattern ## {#match-pattern-parsing}
+
+To <dfn>parse a match pattern</dfn> given |input|:
+
+1. If |input| is `<all_urls>`, return `<all_urls>`.
+1. If |input| does not contain `://`, return failure.
+1. Let |scheme| be the substring of |input| before the first `://`.
+1. If |scheme| is not `*`, and is not one of the permitted literal
+    scheme values (see [[#match-pattern-scheme]]), return failure.
+1. Let |rest| be the substring of |input| following that `://`.
+1. If |scheme| is `file`:
+    1. If |rest| contains no U+002F (/), return failure.
+    1. Let |host| be the empty string. Any text of |rest| before its
+        first U+002F (/) is discarded, not read as a host.
+    1. Let |path| be the substring of |rest| starting at its first
+        U+002F (/), inclusive.
+1. Otherwise:
+    1. If |rest| does not contain U+002F (/), return failure.
+    1. Let |host| be the substring of |rest| before its first U+002F (/).
+    1. If |host| contains U+003A (:), return failure.
+    1. If |host| is not `*`, |host| does not consist of `*.` followed
+        by one or more characters containing no U+002A (*), and |host|
+        contains U+002A (*), return failure.
+    1. Let |path| be the substring of |rest| starting at its first
+        U+002F (/), inclusive.
+1. Return a [=match pattern=] whose |scheme| is |scheme|, whose |host|
+    is |host|, and whose |path| is |path|.
+
+A `file` match pattern's |host| is not merely omitted from the input, it
+is never read as a host at all: whatever text appears between `file://`
+and the next `/`, if any, is discarded rather than validated. This
+matches the [[#match-pattern-host|existing description]] of `file`
+match patterns. It is a separate question from why the
+[[#match-pattern-matching-algorithm]] below skips |path| comparison for
+a `file` |pattern|, which this algorithm does not change.
+
+<div class="example">
+`<all_urls>` and `https://*.example.com/*` both parse successfully.
+`example.com/*` (no `://`) and `https://example.com` (no |path|) both
+fail to parse. `http://example.com:8080/*` also fails to parse; see
+[[#match-pattern-host]] for the open question of whether match
+patterns need a port component at all.
+</div>
+
 ## Matching algorithm ## {#match-pattern-matching-algorithm}
+
+|pattern| here is either `<all_urls>` or the result of a successful
+[=parse a match pattern|parse=] of a match pattern string; see
+[[#match-pattern-parsing]].
 
 To determine whether a [=match pattern=] |pattern| matches a URL |url|:
 
@@ -236,14 +271,16 @@ To determine whether a [=match pattern=] |pattern| matches a URL |url|:
     1. If the [=scheme=] of |url record| is in the permitted scheme set
         for `<all_urls>` (see above), return true.
     1. Otherwise, return false.
-1. If the [=scheme=] of |url record| does not match |pattern|'s |scheme|
-    component (a literal scheme must be equal; `*` must be one of the
-    schemes it expands to for the current context), return false.
-1. If the [=host=] of |url record| does not match |pattern|'s |host|
-    component, return false.
-1. If |pattern|'s |scheme| is not `file`, and |pattern|'s |path|
-    component does not match the [=path=] of |url record| (see the path
-    matching notes above for what "path" includes), return false.
+1. If the [=scheme=] of |url record| does not match |pattern|'s
+    [=match pattern/scheme=] (a literal scheme must be equal; `*` must
+    be one of the schemes it expands to for the current context),
+    return false.
+1. If the [=url/host=] of |url record| does not match |pattern|'s
+    [=match pattern/host=], return false.
+1. If |pattern|'s [=match pattern/scheme=] is not `file`, and
+    |pattern|'s [=match pattern/path=] does not match the [=path=] of
+    |url record| (see the path matching notes above for what "path"
+    includes), return false.
 1. Return true.
 
 This algorithm is run against the URL produced by
@@ -283,4 +320,31 @@ Given the pattern `*://*.example.com/*`:
 </table>
 
 Firefox's `*` scheme wildcard additionally covers `ws`/`wss`.
+</div>
+
+## Unparseable match patterns ## {#unparseable-match-patterns}
+
+A match pattern string that does not [=parse a match pattern|parse=]
+does not match any URL.
+
+<div class=issue>
+What a user agent does beyond that, on encountering such a string in a
+manifest, depends on which manifest key contains it, and differs by
+browser.
+
+For a permission-bearing key (`permissions`, `host_permissions`,
+`optional_permissions`, `optional_host_permissions`), Chrome, Firefox,
+and Safari alike drop the one unparseable entry and load the extension
+with the rest of the list; Chrome and Firefox additionally record a
+warning, Safari does not.
+
+For `content_scripts.matches`, Chrome and Firefox instead refuse to
+load the extension at all when any one entry fails to parse. Safari
+drops only the unparseable entry (or, if every entry in one content
+script definition fails, that definition) and still loads the
+extension.
+
+The group needs to decide whether the consequence of an unparseable
+match pattern needs to be uniform across keys, and if so, which of the
+above.
 </div>
