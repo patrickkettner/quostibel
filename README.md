@@ -106,13 +106,19 @@ markup fix:
 3. `[=web accessible resource=]` in extension-ids is never defined anywhere.
    `index.bs` has an empty "Web accessible resources" heading and no dfn.
 
-Beyond that: several claims in the source material are marked undetermined
-rather than guessed, because the trace ran out before a definite answer did.
-Store-side enforcement of extension ID uniqueness (Chrome Web Store, AMO,
-App Store Connect) isn't in any of the three read-only engine trees and
-wasn't assessed. Whether Gecko decodes percent-encoded paths the way
-Chromium does wasn't determined from `MatchPattern.cpp` alone. Whether a
-managed/enterprise policy can make `permissions.request()` reject outright
-in WebKit wasn't found in its extension API source, one way or the other.
-Each `evidence/*.md` file states its own undetermined points explicitly
-rather than rounding them up to a guess.
+Beyond that: a later pass closed out the claims that were previously marked
+undetermined, either by tracing further than the original three files per
+topic (Gecko does not decode percent-encoded paths, the same as Safari, once
+`nsStandardURL` is read alongside `MatchPattern.cpp`), or by establishing
+that the answer lives outside any of the three engine trees and saying so
+plainly instead of leaving a bare hedge. Store-side enforcement of extension
+ID uniqueness (Chrome Web Store, AMO, App Store Connect) is server-side
+distribution infrastructure, not present in any browser-source checkout, and
+is recorded as such. A managed/enterprise policy blocking
+`permissions.request()` in WebKit is confirmed absent from the open-source
+engine after a broadened search; whether Safari's closed application layer
+does anything equivalent is Safari's own code, outside any tree this project
+can read. Each `evidence/*.md` file states its own findings explicitly, with
+a plain classification for anything that lands outside open source, rather
+than rounding an unresolved question up to a guess or leaving it open by
+default.

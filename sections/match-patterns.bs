@@ -168,10 +168,10 @@ rather than resolved in practice; #580 remains open.
 Issue: Percent-encoding is handled inconsistently. Chrome decodes
 percent-encoded octets in both the URL and the pattern's |path| before
 comparing (falling back to a raw comparison for byte sequences that
-aren't valid UTF-8). Safari performs no decoding at all: a pattern
-containing a literal, unescaped reserved character will not match a URL
-where the user agent encoded that same character. Whether Firefox decodes
-is unconfirmed. See also
+aren't valid UTF-8). Firefox and Safari perform no decoding at all: a
+pattern containing a literal, unescaped reserved character will not
+match a URL where the user agent encoded that same character, in either
+browser. See also
 [w3c/webextensions#945](https://github.com/w3c/webextensions/issues/945),
 a related but distinct percent-encoding discussion scoped to
 declarativeNetRequest's `urlFilter` syntax rather than match patterns.
@@ -257,8 +257,14 @@ URL; it does not itself define how the URL of a document with an
 Firefox additionally supports a stricter "explicit" matching mode (used for
 `host_permissions`-style checks as opposed to `content_scripts.matches`-
 style checks) in which a pattern that matches subdomains (a leading `*.`
-or bare `*` host) never matches, regardless of the URL. Chrome's and
-Safari's match-pattern matching code has no equivalent mode.
+or bare `*` host) never matches, regardless of the URL. Neither Chrome's
+nor Safari's match-pattern matching code has an equivalent mode, and
+neither engine's permission-checking code has one either: Chrome's
+permission code separates host patterns only by which manifest key
+declared them, not by whether they contain a subdomain wildcard, and
+Safari's closest analogous distinction (a pattern naming a specific host
+versus a pattern that matches every host) is a coarser split that still
+treats a subdomain-wildcard pattern the same as a literal one.
 
 The group needs to decide whether this "explicit host" restriction belongs
 in this section as a named concept, or is purely a permission-UI concern

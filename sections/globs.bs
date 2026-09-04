@@ -80,6 +80,15 @@ consult it. A content script that declares `include_globs` to narrow a
 broad `matches` pattern will inject on the full, unnarrowed `matches` set
 in Safari.
 
+Issue: Firefox does not conform to the "empty does not restrict" requirement
+above for this key when it is written in `content_scripts`. An explicit
+`"include_globs": []` there is stored as a real, empty glob set rather than
+being normalized away, and an empty glob set matches no URL, so the content
+script injects nowhere. Firefox's separate `browser.userScripts.register()`/
+`update()` API does normalize an empty `includeGlobs` array to "not
+restricted," matching this section; only the `content_scripts` manifest key
+path has the gap.
+
 ## Key `exclude_globs` ## {#globs-key-exclude_globs}
 
 A <a data-link-type="dfn" data-link-spec="infra">list</a> of [=globs=] that can be used to specify URLs where the content script should not run, even if the URL matches entries in [`matches`](https://w3c.github.io/webextensions/specification/#key-content_scripts-matches) and (if specified) [[#globs-key-include_globs]]. If `exclude_globs` is empty or not present, it does not exclude anything.

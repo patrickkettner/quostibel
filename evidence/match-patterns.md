@@ -163,18 +163,40 @@ read only, not built.
   (`url_pattern.cc:129-132`, `CanonicalizeHostForMatching`), verified by
   `url_pattern_unittest.cc:967-1005` (`TrailingDotDomain`, both
   `example.com` and `example.com.` patterns match both
-  `http://example.com/` and `http://example.com./`). No equivalent
-  stripping call found in Gecko's `MatchesDomain` or WebKit's
-  `matchesHost`; not directly tested in either of those two engines' test
-  files, so treated as "not determined empirically" for Gecko/WebKit
-  beyond the absence of a matching normalization call.
+  `http://example.com/` and `http://example.com./`). Gecko and WebKit
+  both do not strip a trailing dot on either side, traced past
+  `MatchPattern.cpp`/`UserContentURLPattern.cpp` into the URL-host layer
+  each engine's earlier pass left unexamined: Gecko's pattern host is a
+  raw `CopyUTF16toUTF8` of the manifest text with no dot handling
+  (`MatchPattern.cpp:321-329`), and its URL host goes through
+  `NS_DomainToDisplayAndASCII` (`nsStandardURL.cpp:437-452`), which for a
+  real navigated host defers to the UTS46 domain-to-ASCII algorithm
+  (`netwerk/base/idna_glue/src/lib.rs`, backed by the `idna` crate); that
+  algorithm treats a trailing "root label" dot as valid and preserves it
+  rather than removing it (`third_party/rust/idna/src/uts46.rs:458-477`,
+  `verify_dns_length`'s `allow_trailing_dot` parameter strips it only for
+  a length check, not from the returned domain). WebKit's pattern host is
+  likewise a raw substring with no dot handling (`m_host =
+  pattern.substring(...)`, `UserContentURLPattern.cpp:164`), and its URL
+  host comes from `URLParser::domainToASCII`
+  (`Source/WTF/wtf/URLParser.cpp:2566-2605`), whose plain-ASCII fast path
+  only lowercases the string unchanged and whose ICU/UTS46 path
+  (`uidna_nameToASCII`) is the same standard algorithm that preserves a
+  trailing dot. Resolved: neither Gecko nor WebKit strip trailing dots on
+  either side, so (unlike Chromium) `example.com` and `example.com.` are
+  two different hosts to both engines.
 - IPv4/IP literals: no engine treats an IP literal specially in the
   host grammar; it is stored and compared as an opaque host label like any
   other. Chromium explicitly forbids subdomain-matching against an IP host
   even if the pattern used `*.` (`url_pattern.cc:531-535`,
-  `MatchesHost`, `test.HostIsIPAddress()` check). No equivalent explicit
-  carve-out found in Gecko or WebKit source; not determined whether they
-  have the same restriction.
+  `MatchesHost`, `test.HostIsIPAddress()` check). Gecko's `MatchesDomain`
+  (`MatchPattern.cpp:372-386`) and WebKit's `matchesHost`
+  (`UserContentURLPattern.cpp:224-247`) contain no IP-address detection
+  of any kind -- a repository-wide grep of both files for any
+  IP-address-related identifier returns nothing in either. Resolved: both
+  engines apply their ordinary suffix-matching rule uniformly to an
+  IP-literal host exactly as they would to any other host string, with no
+  restriction analogous to Chromium's.
 
 ### Path
 
@@ -241,12 +263,24 @@ read only, not built.
   `WKWebExtensionMatchPattern.mm:398-400` -- pattern with an escaped
   `%3F` in the path only matches a URL with the identical literal `%3F`,
   and a pattern with a literal (unescaped) `?` does not match a URL whose
-  path contains `%3F`. Gecko's `MatchGlobCore::Matches` operates on
-  `nsACString` byte content from `nsIURI::GetPathQueryRef`, with no
-  explicit unescape call found in `MatchPattern.cpp`; not determined
-  whether `nsIURI`'s stored path/query is itself already percent-decoded
-  at that layer (would require reading `nsStandardURL`, out of scope for
-  this task) -- flagged "not determined" for Gecko in the draft.
+  path contains `%3F`. Gecko also does no decoding on either side, traced
+  past `MatchPattern.cpp` into both the pattern-parsing and URL-accessor
+  code that earlier passes flagged as out of scope: the pattern's path is
+  a bare `NS_ConvertUTF16toUTF8` of the manifest text with no unescape
+  call (`MatchPatternCore::MatchPatternCore`, `MatchPattern.cpp:340`, the
+  `NS_ConvertUTF16toUTF8 path(tail);` line feeding `mPath = new
+  MatchGlobCore(path, ...)`), and the URL side's `nsIURI::GetPathQueryRef`
+  resolves for a standard URL to `nsStandardURL::GetPathQueryRef`
+  (`netwerk/base/nsStandardURL.cpp:1367-1370`), which returns
+  `Path()` -- a raw substring of the already-built spec buffer
+  (`nsStandardURL::Path()`, `netwerk/base/nsStandardURL.h:307`) -- with no
+  unescape call anywhere in that path either; its own doc comment reads
+  "result may contain unescaped UTF-8 characters", not "result is
+  percent-decoded". `MatchGlobCore::Matches` then compares these two
+  never-decoded strings directly (`MatchPattern.cpp:809-816`). No test in
+  `test_MatchPattern.js` exercises a percent-encoded literal either way.
+  Resolved: Gecko performs no percent-decoding on either side, the same
+  as WebKit, not the same as Chromium.
 
 ## 3. Case sensitivity, overall
 
@@ -271,10 +305,17 @@ read only, not built.
   the pattern text fails to parse as a valid scheme, but a URL's scheme
   is always already lowercased by GURL, so this rarely surfaces as a
   practical divergence.
-- Gecko: no case-folding call found anywhere in `MatchPattern.cpp` (path
-  glob matching in `MatchGlobCore::Matches`, `MatchPattern.cpp:809-819`,
-  and domain comparison in `MatchesDomain`,
-  `MatchPattern.cpp:372-386`, are both plain byte/string comparisons).
+- Gecko: no case-folding call of any kind (`ToLowerCase`,
+  `EqualsIgnoreCase`, or otherwise) appears anywhere in
+  `MatchPattern.cpp`; path glob matching in `MatchGlobCore::Matches`
+  (`MatchPattern.cpp:809-819`) and domain comparison in `MatchesDomain`
+  (`MatchPattern.cpp:372-386`) are both plain byte/string comparisons
+  with no fold call in either. Host comparison is therefore
+  case-sensitive by the same standard already used elsewhere in this
+  document for an absence-based finding: the pattern's host is a raw,
+  unprocessed copy of the manifest text (see above), and nothing folds
+  either side before `MatchesDomain`'s `==`/suffix check runs, so an
+  uppercase pattern host will not match a real (lowercase) URL host.
   Confirmed case-sensitive path/glob matching directly by test:
   `test_MatchPattern.js:495-496` (`fail({url: "http://mozilla.org",
   pattern: ["*.ORG/"]})`) -- this specific test is on the `MatchGlob`
@@ -371,9 +412,39 @@ scheme) that is dramatically narrower than either and by default excludes
   component order (Chromium interleaves port into the host/origin step).
   Gecko's `aExplicit` early rejection of subdomain patterns is a genuine
   behavior with no counterpart found in the other two engines' match
-  entry points; not determined whether Chromium/WebKit have an equivalent
-  concept elsewhere in their permission-checking code (out of scope: the
-  match-pattern classes themselves have no such flag).
+  entry points, and none was found in their permission-checking code
+  either, once traced past the match-pattern classes themselves.
+  Chromium's `PermissionSet` distinguishes `explicit_hosts()` from
+  `scriptable_hosts()` (`extensions/common/permissions/permission_set.h:36,120,128,159`),
+  but that split is about which manifest key declared a pattern
+  (`host_permissions`/`permissions` versus `content_scripts.matches`),
+  not about whether the pattern contains a subdomain wildcard -- a
+  `*.example.com`-style pattern is a perfectly ordinary member of
+  `explicit_hosts()`. WebKit's `permissionState()` five-state machine
+  (`WebExtensionContext.cpp:866-991`, described further in
+  `host-permissions.md`) does split matches into an "Explicitly" and an
+  "Implicitly" bucket, but the split there is `matchesAllHosts()` (a
+  pattern that matches literally every host, like `<all_urls>` or
+  `*://*/*`) versus a pattern that names a specific domain
+  (`WebExtensionContext.cpp:924-955`) -- a pattern such as
+  `*://*.example.com/*` still lands in the "Explicitly" bucket there,
+  because it doesn't match *all* hosts, even though it does carry a
+  subdomain wildcard. That is a coarser, different distinction from
+  Gecko's rule, which rejects any subdomain-wildcard host (bare `*.`
+  prefix), not just a bare `*`/`<all_urls>`-style pattern. Resolved: no
+  true equivalent of Gecko's `aExplicit` subdomain rejection exists in
+  either Chromium's or WebKit's permission code; the superficial
+  Explicitly/Implicitly naming overlap with WebKit is a false lead. As an
+  aside, Gecko's own `explicit` flag (exposed to JS as
+  `MatchPatternSet.prototype.matches`'s second argument, documented in
+  `dom/chrome-webidl/MatchPattern.webidl:40-47,98-105` as "only explicit
+  domain matches, without wildcards, are considered") was not found
+  passed as `true` by any production caller in
+  `toolkit/components/extensions/` or `browser/components/extensions/`
+  in this tree -- every call site found (including
+  `ExtensionDNR.sys.mjs:1482,1491` and the C++ call sites in
+  `WebExtensionPolicy.cpp`/`ChannelWrapper.cpp`) uses the default
+  `false`; only test files exercise `true` directly on the class.
 
 ## 6. Matching against non-tuple-origin documents
 
@@ -393,13 +464,45 @@ and that Gecko's own scheme allowlist for "non-opaque, meaningful as a
 literal URL" purposes (`http`, `https`, `file`, `view-source`) is close
 to but not identical to the target document's algorithm's `http`/`https`/
 `file` set (Gecko additionally treats `view-source:` as non-opaque; the
-target document's algorithm has no `view-source` case). Not determined
-whether Chromium or WebKit have an equivalent named concept in the
-match-pattern code itself (their equivalent logic, if any, lives outside
-the three files this task scoped in, so this is flagged rather than
-guessed at). The match-patterns section itself does not need to redefine
-this; it only needs to state that matching operates on the URL/origin
-produced by that existing algorithm, and must not contradict it.
+target document's algorithm has no `view-source` case). Chromium and
+WebKit each have an equivalent named concept too, just outside the three
+match-pattern-grammar files this task originally scoped in, and outside
+the match-pattern code itself (consistent with the sibling finding above
+that Chromium's and WebKit's "explicit" analogues also live in
+permission/injection code, not the grammar classes):
+
+- Chromium: `ContentScriptInjectionUrlGetter::Get()`
+  (`extensions/common/content_script_injection_url_getter.cc:18-`),
+  called from `ScriptContext::GetEffectiveDocumentURLForContext`/
+  `GetEffectiveDocumentURLForInjection` (`extensions/renderer/script_context.cc:408-434`).
+  For `about:`/`blob:`/`data:`/`filesystem:` documents, it resolves the
+  frame's origin (or, for an opaque origin, its precursor origin via
+  `url::Origin::GetTupleOrPrecursorTupleIfOpaque()`) to a concrete URL,
+  gated by a per-content-script `match_origin_as_fallback` behavior
+  (`kNever`/`kMatchForAboutSchemeAndClimbTree`/`kAlways`) -- i.e. Chromium
+  can climb through an origin's precursor chain, not just to an immediate
+  parent document.
+- WebKit: `LocalFrame::injectUserScriptImmediately()`
+  (`Source/WebCore/page/LocalFrame.cpp:829-852`) substitutes the literal
+  parent document's URL (`parentDocument->url()`) when the current
+  document's URL is `about:`/`blob:`/`data:` (for
+  `UserContentMatchParentFrame::ForOpaqueOrigins`) or specifically
+  `about:blank` (`::ForAboutBlank`), driven by the `match_origin_as_fallback`/
+  `match_about_blank` manifest keys parsed in
+  `WebExtension.cpp:1447-1458`. This only ever looks at
+  `document->parentDocument()` one level up; it does not climb an
+  opener/precursor chain the way Chromium's does.
+
+Resolved that both engines have the concept; not resolved (and not
+attempted further here, since it is outside match-pattern grammar
+proper) whether Chromium's precursor-tuple climbing and WebKit's
+single-parent substitution produce identical results in every case --
+they are visibly different mechanisms and could plausibly diverge for a
+multi-level or opener-based frame hierarchy, but confirming that would
+need its own dedicated pass. The match-patterns section itself does not
+need to redefine any of this; it only needs to state that matching
+operates on the URL/origin produced by the target document's existing
+algorithm, and must not contradict it.
 
 ## 7. Divergence summary (for the Issue: lines in the draft)
 
@@ -424,16 +527,21 @@ produced by that existing algorithm, and must not contradict it.
 6. Case sensitivity of host matching -- WebKit is deliberately,
    explicitly case-insensitive. Chromium is case-insensitive only as a
    side effect of canonicalizing both sides to lowercase. Gecko has no
-   fold at all (not determined empirically, inferred from absent code).
+   fold at all: no case-folding call of any kind appears in
+   `MatchPattern.cpp`, and the pattern's host is stored as a raw,
+   unprocessed copy of the manifest text, so an uppercase pattern host
+   will not match a real (lowercase) URL host.
 7. IDN/punycode canonicalization of the pattern's host -- only
    Chromium does it at parse time. Gecko and WebKit do not; a
    Unicode-literal host in the pattern will not match a real (punycode)
    URL host unless the author writes punycode themselves.
 8. Percent-encoding handling of the path -- Chromium unescapes before
    comparing (both sides). WebKit never unescapes (literal byte
-   comparison). Gecko: not determined (no explicit unescape call found in
-   `MatchPattern.cpp`; would require tracing into `nsIURI`/`nsStandardURL`
-   to be certain, out of scope for the three files this task named).
+   comparison). Gecko never unescapes either (traced into
+   `nsStandardURL::GetPathQueryRef`/`Path()`, which returns a raw spec
+   substring, and into `MatchPatternCore`'s own path parsing, which is a
+   bare UTF-16-to-UTF-8 conversion): Gecko groups with WebKit here, not
+   with Chromium.
 9. Query string inclusion in path matching -- confirmed directly for all
    three engines, not inferred:
    - Chromium: `URLPattern::MatchesURL` compares against
@@ -480,28 +588,47 @@ produced by that existing algorithm, and must not contradict it.
     externally observable, noted for completeness only, not drafted as
     a normative Issue.
 11. Trailing-dot host normalization -- Chromium explicitly strips
-    trailing dots before comparing hosts. No equivalent call found in
-    Gecko or WebKit; not confirmed empirically for either.
+    trailing dots before comparing hosts. Neither Gecko nor WebKit do:
+    traced past `MatchPattern.cpp`/`UserContentURLPattern.cpp` into each
+    engine's URL-host layer (Gecko's `nsStandardURL`/IDNA-processing
+    path, WebKit's `URLParser::domainToASCII`), and both preserve rather
+    than strip a trailing dot, matching the standard domain-to-ASCII
+    algorithm's own treatment of the trailing "root label" dot as valid
+    and significant, not something to normalize away.
 12. Gecko's `aExplicit` early-reject of subdomain-wildcard patterns --
-    has no analogue found in Chromium's or WebKit's match-pattern entry
-    points as read; noted for awareness, not drafted as a normative
-    Issue since it is a permission-classification behavior layered on
-    top of match-pattern matching, not core grammar.
+    traced into both Chromium's and WebKit's permission-checking layers
+    (not just their match-pattern entry points) and no true analogue was
+    found in either; the closest-sounding candidates (Chromium's
+    `explicit_hosts()`/`scriptable_hosts()` split, WebKit's
+    Explicitly/Implicitly `PermissionState` values) turn out to be
+    different concepts on inspection (manifest-key provenance for
+    Chromium; "matches literally all hosts" vs. "names a specific
+    domain" for WebKit, which still treats a subdomain-wildcard pattern
+    as "Explicitly"). Noted for awareness, not drafted as a normative
+    Issue in the target document, since it is a permission-classification
+    behavior layered on top of match-pattern matching, not core grammar.
 
-## 8. Things explicitly not determined
+## 8. Things not determined from the three originally-scoped files, resolved by reading further
 
-- Whether Gecko's `nsIURI`/`nsStandardURL` percent-decodes the path/query
-  before `MatchPatternCore` ever sees it (would need to read outside the
-  three named files; not done here).
-- Whether Chromium or WebKit have an analogue of Gecko's
-  `aExplicit` early subdomain-pattern rejection anywhere in their
-  permission-checking layers (out of scope of the three named
-  match-pattern files).
-- Whether Gecko or WebKit strip trailing dots from hosts before
-  comparison (no call found either way; not exercised by any test found
-  in either engine's test file for match patterns).
-- The exact IPv6-address-vs-subdomain-wildcard restriction in Gecko and
-  WebKit (Chromium explicitly forbids `*.` matching against IP-literal
-  hosts; no equivalent carve-out located in the other two engines'
-  source, and not exercised by a test in either engine's file for that
-  specific case).
+Every item below was left open by an earlier pass because the three
+files it started from (`MatchPattern.cpp`/`.h`,
+`UserContentURLPattern.cpp`/`.h`, `url_pattern.cc`/`.h`) don't contain
+the answer. All four were resolved by following the same call chains
+into the files that do:
+
+- Gecko's percent-decoding: resolved in section 2 above and item 8 -- no
+  decoding on either side, traced into `nsStandardURL.cpp` and
+  `MatchPatternCore`'s own path-parsing code.
+- Chromium's and WebKit's permission-checking layers for an analogue of
+  Gecko's `aExplicit` subdomain rejection: resolved in section 5 above
+  and item 12 -- no true equivalent in either, traced into
+  `permission_set.h`/`.cc` for Chromium and `WebExtensionContext.cpp`'s
+  `permissionState()` for WebKit.
+- Trailing-dot stripping in Gecko and WebKit: resolved in the Host
+  subsection above and item 11 -- neither strips it, traced into each
+  engine's URL/IDNA host-normalization code.
+- The IP-literal-vs-subdomain-wildcard restriction in Gecko and WebKit:
+  resolved in the Host subsection above -- neither has any IP-address
+  detection logic in their match/domain-comparison functions, so neither
+  restricts subdomain-wildcard matching against an IP-literal host the
+  way Chromium does.

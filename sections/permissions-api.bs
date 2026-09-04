@@ -94,9 +94,12 @@ dictionary Permissions {
 
 ## Methods ## {#permissions-methods}
 
-Issue: Chrome, Firefox, and Safari additionally accept a callback function as a trailing
-argument on every method here, resolved/invoked instead of returning a promise when supplied.
-This specification defines only the promise form here; see [Promises and callbacks](https://w3c.github.io/webextensions/specification/#promises-and-callbacks) (currently empty)
+Issue: Chrome, Firefox, and Safari all additionally accept an optional callback function as a
+trailing argument on every method here (`getAll()`, `contains()`, `request()`, and `remove()`),
+invoked instead of resolving the returned promise when supplied. This holds uniformly across
+Manifest V2 and Manifest V3 in all three browsers; none of them restricts either the callback
+form or the promise form to one manifest version. This specification defines only the promise
+form here; see [Promises and callbacks](https://w3c.github.io/webextensions/specification/#promises-and-callbacks) (currently empty)
 for how dual promise/callback signatures are expressed generally.
 
 <pre class="idl">
@@ -260,9 +263,17 @@ extension's active permissions increase. This includes grants made through
 (for example, a browser action letting the user grant a withheld host permission).
 
 Chrome explicitly does not fire `onAdded`/`onRemoved` for permission or host-permission grants
-driven entirely by administrative or managed policy. Whether Firefox's and Safari's
-policy-driven grants go through the same code path as user- and API-driven grants, and therefore
-also fire the event, is unconfirmed.
+driven entirely by administrative or managed policy. Firefox and Safari both disagree with
+Chrome here, for different reasons. Firefox's policy-driven permission revocation runs through
+the same
+internal grant/revoke function the `permissions` API itself calls, with no suppression for the
+policy case, so it fires `onRemoved` the same as an API-driven or user-driven change would.
+Safari's engine fires `onAdded`/`onRemoved` whenever the embedding application sets the
+extension's granted or denied permissions, regardless of why the application did so; since a
+managed policy on Safari is applied by the application setting those same properties (see above),
+a policy-driven change fires the event there too, unless the application takes some further step
+outside the engine to suppress it, which is not something the open-source engine controls one way
+or the other.
 
 ### `onRemoved` ### {#permissions-onremoved}
 

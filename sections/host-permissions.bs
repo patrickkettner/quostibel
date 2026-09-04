@@ -161,8 +161,7 @@ A granted host permission does not change this outcome, even
 `<all_urls>`.
 
 <div class=issue>
-Chrome, Firefox, and Safari arrived at the content-script rule above differently, and
-Safari's historical (MV2) behavior is unconfirmed:
+Chrome, Firefox, and Safari arrived at the content-script rule above differently:
 
 * Chrome removed cross-origin content script fetches as a platform
     change (Chrome 73 CORB, Chrome 85 CORS enforcement, allowlist fully
@@ -174,16 +173,18 @@ Safari's historical (MV2) behavior is unconfirmed:
     that includes the extension's own principal (bypassing CORS via host
     permissions, per Firefox's own source comments), while an MV3 content
     script gets no such override and inherits the page's own `fetch`/XHR.
-* WebKit wires its CORS bypass configuration only into extension-page
-    web views, never into the content-script world; no MV2-specific
-    content-script fetch override is present. Whether Safari ever offered
-    content scripts a cross-origin fetch bypass, for either manifest
-    version, is unconfirmed.
+* Safari's engine wires its CORS bypass configuration only into
+    extension-page web views, and that wiring does not branch on manifest
+    version at all, unlike a neighboring property in the same code path
+    that does. Content scripts run inside the tab's own web view, in an
+    isolated script world that never receives the bypass configuration.
+    Nothing in the engine, for either manifest version, ever gives a
+    content script a cross-origin fetch bypass.
 
-The group needs to confirm Safari's historical (MV2) behavior before this
-specification states the MV2 case normatively, and decide whether this
-specification describes MV2 content-script fetch behavior at all, given
-it is a legacy, converged-away-from state in Chrome and Firefox.
+Safari's content-script fetch behavior has therefore never differed by
+manifest version: content scripts have always been subject to the same
+cross-origin rules as the page, matching Chrome's and Firefox's current
+(post-MV3-convergence) behavior rather than Firefox's legacy MV2 exemption.
 </div>
 
 <div class="example">

@@ -24,22 +24,23 @@ quoted, not recalled.
 | 11 | **Version-comparison ordering flips**: `"4294967295.0"` sorts newer than `"1.0"` in Chromium, older (≈`"0.0"`) in Gecko, via silent int32-overflow clamp | Gecko | none found for the comparison bug itself (only the adjacent grammar thread, #6/#283) | Medium: narrow fix (stop clamping to 0 on overflow), but sibling bug #4 shows Mozilla has triaged a similar report away before |
 | 12 | Glob `?` matches 0-or-1 chars (Chromium) vs. exactly 1 (Gecko) | 2-way (WebKit n/a) | none found | Medium: narrow, self-contained per engine |
 | 13 | Glob match target includes the URL fragment (Chromium) vs. excludes it (Gecko) | Gecko (2-way, WebKit n/a) | none found | Low: small, edge-case fix |
-| 14 | Chromium strips trailing dots from hosts before comparing; Gecko/WebKit unconfirmed | Chromium (only confirmed implementer) | none found | Low: minor, and 2 of 3 engines are unverified either way |
+| 14 | Chromium strips trailing dots from hosts before comparing; Gecko and WebKit do not | Chromium | none found | Low: minor, and now fully confirmed on all three sides |
 | 15 | `permissions.request()` reachable from content scripts | Firefox (deliberate) | none found | Low: looks like a considered Firefox design choice, not a bug |
 | 16 | `permissions.getAll()` synthesizes an implicit all-hosts origin | WebKit | none found | Low-medium: looks deliberate (privacy/UX), not obviously wrong |
 | 17 | `permissions.request()` requires a native window to exist | Chrome (deliberate) | none found | Low: looks like a considered Chrome UX check |
-| 18 | Path percent-encoding: decode-and-compare (Chromium) vs. literal compare (WebKit) vs. undetermined (Gecko) | WebKit confirmed outlier, Gecko unknown | none found for match patterns (adjacent: w3c/webextensions #945, DNR only) | Medium: WebKit's half is a decode step; Gecko needs tracing first |
-| 19 | Host-matching case sensitivity: deliberate (WebKit) vs. incidental (Chromium) vs. unknown (Gecko) | mixed / unclear | none found | Low: unclear what to even ask for until Gecko is traced |
+| 18 | Path percent-encoding: decode-and-compare (Chromium) vs. literal, undecoded compare (Gecko and WebKit) | Chromium | none found for match patterns (adjacent: w3c/webextensions #945, DNR only) | Medium: Chromium's decode step is the one-of-three; two engines already agree on doing nothing |
+| 19 | Host-matching case sensitivity: deliberate (WebKit) vs. incidental (Chromium) vs. no fold at all (Gecko) | Gecko (only engine with no fold and no incidental lowercasing to fall back on) | none found | Low: now a real three-way comparison; an uppercase pattern host silently fails to match in Gecko alone |
 | 20 | **WebKit grants no host permissions automatically at install**; Chromium and Gecko both auto-grant required `host_permissions` | WebKit | none found | Low tractability, high importance: an architectural choice (embedding app owns granting), not a bug |
-| 21 | Restricted-host/domain lists differ in kind: Chromium blocks the Web Store domain + gates `chrome://`; Gecko blocks a configurable AMO/accounts allowlist + a separate quarantine list; WebKit has neither | all three differ in mechanism | none found | Low: policy-territory, WG may not want to standardize this at all |
-| 22 | Content-script cross-origin fetch bypassed CORS under MV2 in Chromium (pre-Chrome-87) and Gecko (still shipping); unconfirmed whether WebKit's MV2 ever had it. All three agree for MV3 today. | historical / mostly resolved | adjacent: w3c/webextensions #730 (XHR/CSP inconsistencies, open, active 2024-12-06) - different mechanism, not the same finding | Low priority: largely already converged, FYI only |
+| 21 | Restricted-host/domain lists differ in kind: Chromium blocks the Web Store domain + gates `chrome://`; Gecko blocks a configurable AMO/accounts allowlist + a separate quarantine list; WebKit confirmed to have neither, after a broadened search | all three differ in mechanism | none found | Low: policy-territory, WG may not want to standardize this at all |
+| 22 | Content-script cross-origin fetch bypassed CORS under MV2 in Chromium (pre-Chrome-87) and Gecko (still shipping); WebKit's engine never offered it, for either manifest version. All three agree for MV3 today. | historical / fully resolved | adjacent: w3c/webextensions #730 (XHR/CSP inconsistencies, open, active 2024-12-06) - different mechanism, not the same finding | Low priority: fully converged, FYI only |
 | 23 | `<all_urls>` / bare `*` / ws-wss-data scheme coverage in match patterns | all three differ | none found (adjacent: w3c/webextensions #580, not the same conversation) | Low: deep, touches Chromium's permission-surface-specific scheme bitmasks |
 | 24 | IDN/punycode canonicalization of the pattern's host at parse time | Chromium (only implementer) | none found | Low: real IDNA integration work for two engines, not an obvious "fix the bug" ask |
 | 25 | `data_collection` permission dimension | Firefox only, pref-gated | none found | Low: not a bug fix, a whole missing concept for two engines |
-| 26 | Enterprise/managed-policy blocking of optional permission requests | WebKit (unconfirmed absence) | none found | Unknown: absence isn't confirmed, so no fix can be sized yet |
+| 26 | Enterprise/managed-policy blocking of optional permission requests | WebKit (confirmed absent from the open-source engine; not in open source whether Safari does this at the application layer) | none found | Low: nothing to fix in the engine; if Safari does this at all, it is closed application code outside this spec's reach |
 | 27 | **Extension ID derivation is irreconcilable three ways**; Gecko deliberately decouples the origin host from the ID as an anti-fingerprinting measure | all three differ, Gecko's difference is intentional | none on w3c/webextensions; Mozilla-side #1717671 (NEW, active ~5 months ago) and meta-bug #1372288 push Gecko's decoupling *further*, not toward convergence | Lowest: this is a "specify the difference," not a "please converge" - Gecko's behavior is a considered privacy feature |
 | 28 | `addHostAccessRequest`/`removeHostAccessRequest` (Chrome only); `AnyPermissions` (Firefox only) | Chrome and Firefox each carry a method/dictionary the other two lack | w3c/webextensions proposal `permissions-addHostAccessRequest-api.md`, PR #529/#728, #700 (closed, Safari opposed); minutes 2025-10-23 and 2025-03-26-berlin-f2f | Inventory difference, not a behavior mismatch on a shared member - out of scope for a cross-browser core spec by construction |
 | 29 | Three Safari permission names (`bookmarks`, `offscreen`, `sidePanel`) implemented but compiled out by a disabled build flag | Safari (against its own future self) | none found - a build-flag state, not a bug or proposal | N/a: not a fix request, a note that the recognized-name-set snapshot is volatile |
+| 30 | Gecko's `content_scripts` manifest key does not normalize an empty `include_globs`/`exclude_globs`; its own `userScripts` runtime API does | Gecko (against itself) | none found | High: the fix already exists and ships in the sibling API, just not applied here |
 
 ---
 
@@ -423,23 +424,27 @@ URI, in Gecko's `CSpec()`.
 
 ---
 
-## 14. Chromium strips trailing dots from hosts; Gecko/WebKit unconfirmed
+## 14. Chromium strips trailing dots from hosts; Gecko and WebKit do not
 
-**Outlier**: Chromium is the only *confirmed* implementer of trailing-dot stripping
-(`url_pattern.cc:129-132`, `CanonicalizeHostForMatching`, tested by
-`url_pattern_unittest.cc:967-1005`). The findings explicitly could not confirm whether Gecko's
-`MatchesDomain` or WebKit's `matchesHost` do or don't strip a trailing dot - no stripping call was
-found in either, but neither is exercised by a test in either engine's suite for this case.
+**Outlier**: Chromium. It strips a trailing dot from both the pattern's host and the tested host
+before comparing (`url_pattern.cc:129-132`, `CanonicalizeHostForMatching`, tested by
+`url_pattern_unittest.cc:967-1005`). Confirmed, not merely absent, for the other two: Gecko's
+pattern host is a raw copy of the manifest text with no dot handling, and the URL side's IDNA
+domain-to-ASCII processing (`nsStandardURL.cpp`, backed by the `idna` crate's UTS46
+implementation) treats a trailing root-label dot as valid and preserves it rather than stripping
+it. WebKit's pattern host is likewise a raw substring, and its URL-side `domainToASCII` (both the
+plain-ASCII fast path and the ICU/UTS46 path) preserves the dot the same way.
 
 **Existing conversation**: none found ("trailing dot" surfaced only DNR-normalization issue #770,
 a different subsystem).
 
-**What harmony would look like**: undetermined pending confirmation in the other two engines; not
-enough is known yet to say who the outlier even is, only that Chromium is the one engine known to
-normalize this.
+**What harmony would look like**: adopting Chromium's strip, since it is the only one of the three
+that treats `example.com` and `example.com.` as the same host; the other two treat them as
+different hosts today.
 
-**Cost to the outlier**: not assessable from source alone in Gecko/WebKit's case; would need
-either a build or a positive test showing `example.com.` behavior in each.
+**Cost to the outlier**: not applicable in the "fix the outlier" sense here, since Chromium is
+already the one doing the stripping; adding it to Gecko and WebKit would be a small, well-scoped
+normalization step in each engine's host-parsing code, not a deep change.
 
 ---
 
@@ -511,15 +516,17 @@ intentional.
 
 ---
 
-## 18. Path percent-encoding: decode-and-compare (Chromium) vs. literal (WebKit) vs. undetermined (Gecko)
+## 18. Path percent-encoding: decode-and-compare (Chromium) vs. literal, undecoded compare (Gecko and WebKit)
 
-**Outlier**: WebKit confirmed; Gecko's behavior is explicitly unconfirmed in the findings (no
-explicit unescape call found in `MatchPattern.cpp`, but whether `nsIURI`'s stored path is already
-decoded upstream was not traced - flagged "not determined" rather than "matches Chromium" or
-"matches WebKit"). Chromium tries both the unescaped-UTF8 and raw forms
-(`url_pattern.cc:590-684`); WebKit compares the literal, possibly percent-encoded string with no
-decoding at all, proven directly by `WKWebExtensionMatchPattern.mm:398-400` (a pattern with a
-literal `%3F` only matches a URL with the identical literal `%3F`).
+**Outlier**: Chromium, now confirmed two-against-one rather than one-confirmed-plus-one-unknown.
+Chromium tries both the unescaped-UTF8 and raw forms (`url_pattern.cc:590-684`). WebKit compares
+the literal, possibly percent-encoded string with no decoding at all, proven directly by
+`WKWebExtensionMatchPattern.mm:398-400` (a pattern with a literal `%3F` only matches a URL with the
+identical literal `%3F`). Gecko does the same as WebKit, traced past `MatchPattern.cpp` into both
+ends: the pattern's path is a bare UTF-16-to-UTF-8 conversion of the manifest text with no unescape
+call, and the URL side's `nsStandardURL::GetPathQueryRef`/`Path()` returns a raw substring of the
+already-built spec buffer, whose own doc comment reads "result may contain unescaped UTF-8
+characters," not "result is percent-decoded." Two never-decoded strings compared directly.
 
 **Existing conversation**: not for match patterns. **w3c/webextensions #945, "DNR URL matching and
 percent encoding," open, most recently active 2026-01-29**, is the adjacent precedent - same three
@@ -528,33 +535,38 @@ subsystem from `content_scripts.matches`/`host_permissions` path matching. Worth
 evidence the working group already tracks percent-encoding divergences elsewhere, not as the same
 conversation.
 
-**What harmony would look like**: not decidable yet with two of three engines' behavior only
-partly known (Gecko undetermined). Chromium's "try both forms" is the most permissive/forgiving
-and would be the most natural target if Gecko turns out to already decode.
+**What harmony would look like**: two of three engines already agree on doing no decoding at all;
+Chromium's "try both forms" is the more permissive and forgiving behavior, but converging on it
+would mean adding a decode step to both Gecko and WebKit, not a one-engine fix.
 
-**Cost to the outlier**: WebKit's half looks like a real decode step would need to be added, not
-just adjusted, since it decodes nothing today. Gecko's status can't be sized without first tracing
-`nsStandardURL`.
+**Cost to the outlier**: real decode-step work in two engines, not one; Gecko's and WebKit's
+current behavior is identical in outcome (literal byte comparison), so this is a genuine two-way
+alignment problem against Chromium, not a lone WebKit gap.
 
 ---
 
-## 19. Host-matching case sensitivity: deliberate (WebKit) vs. incidental (Chromium) vs. unknown (Gecko)
+## 19. Host-matching case sensitivity: deliberate (WebKit) vs. incidental (Chromium) vs. no fold at all (Gecko)
 
-**Outlier**: mixed, not clean. WebKit calls `equalIgnoringASCIICase`/`endsWithIgnoringASCIICase`
-explicitly (`UserContentURLPattern.cpp:224-247`) - deliberately case-insensitive regardless of how
-the pattern was written. Chromium's host comparison is case-insensitive only as a side effect of
-both sides already being canonicalized to lowercase before the `==`
-(`url_pattern.cc:514-546`) - an intentionally-uppercase pattern host would still work today, but
-not because of a fold. Gecko has no case-folding call anywhere in `MatchesDomain`
-(`MatchPattern.cpp:372-386`), which the findings flag as "inferred from source, not directly
-tested" - an uppercase pattern host may not match a real (lowercase) URL host in Gecko.
+**Outlier**: Gecko, now that all three are confirmed rather than one being unknown. WebKit calls
+`equalIgnoringASCIICase`/`endsWithIgnoringASCIICase` explicitly (`UserContentURLPattern.cpp:224-247`)
+- deliberately case-insensitive regardless of how the pattern was written. Chromium's host
+comparison is case-insensitive only as a side effect of both sides already being canonicalized to
+lowercase before the `==` (`url_pattern.cc:514-546`) - an intentionally-uppercase pattern host
+would still work today, but not because of a fold. Gecko has no case-folding call of any kind
+anywhere in `MatchPattern.cpp`, and its pattern host is stored as a raw, unprocessed copy of the
+manifest text; nothing folds either side before `MatchesDomain`'s comparison runs
+(`MatchPattern.cpp:372-386`). Unlike Chromium, Gecko has no incidental lowercasing to fall back on:
+an uppercase pattern host genuinely does not match a real (lowercase) URL host in Gecko.
 
 **Existing conversation**: none found.
 
-**What harmony would look like**: not decidable as stated - Gecko's actual behavior needs
-confirming (a build or a positive test) before there's a real three-way comparison to reconcile.
+**What harmony would look like**: Chrome's and Safari's observable behavior (case-insensitive host
+matching, whether by design or by canonicalization side effect) is already the two-out-of-three
+norm; Gecko is the one engine where an author's uppercase host literal silently breaks.
 
-**Cost to the outlier**: not sized; contingent on the Gecko finding above.
+**Cost to the outlier**: small and self-contained - one fold call (or a canonicalize-at-parse-time
+step matching Chromium's approach) added to Gecko's pattern-host storage or its `MatchesDomain`
+comparison.
 
 ---
 
@@ -607,11 +619,12 @@ permitted chrome-scheme hosts for MV3 extensions regardless of flags
 (`chrome_extensions_client.cc:129-141`). Gecko blocks a configurable pref-based allowlist of AMO
 and Firefox-accounts domains (`extensions.webextensions.restrictedDomains`,
 `all.js:3133`) plus a separately-configurable quarantine list that privileged extensions can be
-exempted from (`WebExtensionPolicy.h:139-146`). WebKit has no equivalent restricted-domain list
-found anywhere under `Source/WebKit/UIProcess/Extensions/` or `Source/WebKit/Shared/Extensions/` -
-the findings flag this as an absence-based, unconfirmed finding, plausibly explained by Safari
-extensions being distributed through App Store review rather than a web-reachable gallery a
-content script could target (findings row 4, section 5).
+exempted from (`WebExtensionPolicy.h:139-146`). WebKit has no equivalent restricted-domain list. A broadened search across all of
+`Source/WebKit/` and `Source/WebCore/`, not just the two extension directories, found nothing
+resembling one: this is now a confirmed absence, not an unconfirmed one. It is explained by
+Safari extensions being distributed through App Store review rather than a web-reachable gallery
+a content script could target, so there is no equivalent surface for the engine to protect at the
+URL-matching layer (findings row 4, section 5).
 
 **Existing conversation**: none found.
 
@@ -636,9 +649,11 @@ comments show the same end state reached differently: content-script `fetch`/`XM
 (`ExtensionContent.sys.mjs:1063-1074`, with an explicit `isMV2` branch); under MV3 those globals
 are not pushed, so content-script fetch runs under the page's own principal - matching Chromium's
 already-shipped model. WebKit ties its CORS-disabling `WKWebViewConfiguration` exclusively to
-extension pages, never to the content-script `WKWebView`; whether WebKit's content-script fetch
-ever bypassed CORS under an MV2-era mode could not be confirmed or denied from source (a negative
-finding, findings row 4, section 2).
+extension pages, never to the content-script `WKWebView`, and this wiring does not branch on
+manifest version at all, unlike a neighboring property in the same function that does. Content
+scripts run in an isolated content-script world that never receives the bypass configuration.
+WebKit's content-script fetch has never bypassed CORS, for either manifest version (findings row
+4, section 2).
 
 **Existing conversation**: not the same finding, but adjacent: **w3c/webextensions #730, "XHR from
 content scripts should not be affected by page's CSP / Permissions-Policy (also, cross-browser
@@ -647,11 +662,12 @@ mechanism - synchronous XHR being blocked by `Permissions-Policy: sync-xhr` in C
 connect-src` in Firefox for MV3 content scripts - not about the historical CORS-bypass-removal
 question this finding covers.
 
-**What harmony would look like**: for MV3, all three already agree (content scripts get no CORS
-bypass); nothing to reconcile there. The only open point is confirming WebKit's MV2-era behavior,
-which is a factual gap, not a disagreement to resolve.
+**What harmony would look like**: nothing to reconcile. All three already agree for MV3, and
+WebKit's MV2-era behavior is now confirmed to match that same converged state rather than being an
+open factual gap.
 
-**Cost to the outlier**: not applicable - this is FYI/completeness, not a live three-way gap.
+**Cost to the outlier**: not applicable - this is FYI/completeness, not a live three-way gap, and
+is now fully resolved rather than partially so.
 
 ---
 
@@ -733,25 +749,32 @@ WebKit, adopting it means designing a whole new permission category, well beyond
 
 ---
 
-## 26. Enterprise/managed-policy blocking of optional permission requests (WebKit, unconfirmed)
+## 26. Enterprise/managed-policy blocking of optional permission requests (WebKit's open-source engine, confirmed absent)
 
-**Outlier**: possibly WebKit, but not confirmed. Chrome has an explicit
-`kBlockedByEnterprisePolicy` check (`permissions_api.cc:406-410`). Firefox has an explicit
-equivalent check against `Services.policies?.getExtensionSettings(...)?.blocked_permissions`, with
-a comment noting it matches Chrome's error string on purpose (`ext-permissions.js:150-165`). The
-two WebKit files that implement `permissionsRequest()` show no such check, but the findings
-explicitly flag this as "undetermined whether WebKit enforces managed configuration... through some
-other layer not read for this task" - grepped only within `Source/WebKit/*/Extensions`.
+**Outlier**: WebKit's open-source engine, confirmed rather than merely suspected. Chrome has an
+explicit `kBlockedByEnterprisePolicy` check (`permissions_api.cc:406-410`). Firefox has an
+explicit equivalent check against `Services.policies?.getExtensionSettings(...)?.blocked_permissions`,
+with a comment noting it matches Chrome's error string on purpose (`ext-permissions.js:150-165`).
+A broadened search across every `.cpp`/`.h` file under `Source/WebKit/UIProcess/Extensions/`
+(not just the two files that implement `permissionsRequest()`) for `policy`/`Policy`/`MDM`/
+`ManagedConfiguration` turns up nothing but unrelated hits (content-security-policy manifest-key
+handling, an unrelated WKUIDelegate navigation method). No managed/MDM-style permission-blocking
+mechanism exists anywhere in the open-source WebKit extension engine. This is consistent with the
+finding elsewhere in this document that Apple's public MDM schema for Safari extensions
+(`com.apple.configuration.safari.extensions.settings`) is host/domain-scoped only, with no
+equivalent key documented for non-host permissions: whatever Safari's closed application layer
+does for non-host permissions under managed policy, if anything, is not part of any open-source
+tree.
 
 **Existing conversation**: none found (web search for WebKit enterprise/managed permission
 handling surfaced only Firefox-side results).
 
-**What harmony would look like**: can't be stated yet - if WebKit does enforce this elsewhere (an
-MDM profile mechanism was named as a plausible location but not checked), there's no divergence
-to reconcile at all.
+**What harmony would look like**: nothing to reconcile in the engine itself, since there is
+nothing there to change; if Safari's closed application layer does enforce this, it does so
+outside any mechanism this specification could reference.
 
-**Cost to the outlier**: not sizeable until the absence is actually confirmed. This should be the
-first thing verified, not the first thing raised with a vendor.
+**Cost to the outlier**: not applicable - the absence is now confirmed, not merely a search that
+came up empty; there is no engine-side gap left to size.
 
 ---
 
@@ -898,3 +921,32 @@ flags exist for staged rollout, not as a design disagreement.
 
 **Cost to the outlier**: n/a. Recorded here so the informative note listing the sixteen-name
 intersection in `sections/permissions-api.bs` is understood as a snapshot, not a promise.
+
+---
+
+## 30. Gecko's own `content_scripts` manifest key does not normalize an empty `include_globs`, its `userScripts` runtime API does
+
+**Outlier**: Gecko, against itself. This is not a cross-engine split so much as an internal
+inconsistency between Gecko's two content-script-registration surfaces, and it produces a
+cross-engine divergence as a side effect. `browser.userScripts.register()`/`.update()` normalizes
+an explicit `includeGlobs: []`/`excludeGlobs: []` to `null` before construction
+(`ExtensionUserScripts.sys.mjs:592,608-613`, `nonEmptyOrNull`), matching Chromium's "empty list
+imposes no restriction" behavior. The `content_scripts` manifest key path has no equivalent
+normalization: `Extension.sys.mjs:2158-2159` passes `options.include_globs` through unchanged, so
+a literal `"include_globs": []` in a manifest reaches `WebExtensionContentScript.webidl`'s
+nullable `includeGlobs` sequence as a present-but-empty array, not `null`. `WebExtensionPolicy.cpp`
+treats a present, empty `MatchGlobSet` as a real (if vacuous) restriction: an empty set never
+matches (`MatchGlobSet::Matches` on an empty set returns `false`), so the match check fails
+unconditionally. Net effect: `"content_scripts": [{"matches": [...], "include_globs": []}]` in a
+Gecko manifest makes the content script match no URL at all - the opposite of Chromium's "no
+restriction" for the identical input, and the opposite of what Gecko's own `userScripts` API does
+for the same `[]` value.
+
+**Existing conversation**: none found.
+
+**What harmony would look like**: applying the same `nonEmptyOrNull`-style normalization Gecko
+already uses for `userScripts` to the `content_scripts` manifest path would align both Gecko
+surfaces with each other and with Chromium in one step.
+
+**Cost to the outlier**: small and self-contained - the fix is a known, already-shipping pattern
+in the same codebase, just not applied to this second entry point.

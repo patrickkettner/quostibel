@@ -176,7 +176,8 @@ A repo-wide grep for `compareVersions`/`CompareVersion` under
 returns nothing. `version` is stored and surfaced as an opaque string
 (`m_version`, `WebExtension.h:428`); if Safari or another embedder performs
 version comparison for update decisions, that logic is not in the open
-WebKit repository and is undetermined from this source tree.
+WebKit repository. Classification: not in open source, not an open question
+(see the "Not in open source" section below).
 
 ### Concrete divergent ordering: Chromium vs. Gecko
 
@@ -256,22 +257,44 @@ distinguish "absent" from "empty" at all -- both trip the same
   present and type-correct, so it is accepted (with a format warning) --
   Gecko is the only one of the three engines where an empty `version` value
   is not itself fatal.
-- WebKit: not rejected at the engine level, from what is readable here.
+- WebKit: not rejected at the engine level, and this is by the engine's own
+  documented design rather than an unverified gap in this source tree.
   `WebExtension::populateDisplayStringsIfNeeded` records an
-  `Error::InvalidVersion` (`WebExtension.cpp:952-954`) when `version` is
+  `Error::InvalidVersion` (`WebExtension.cpp:920,954`) when `version` is
   missing or empty, but `recordError` only appends to an `m_errors` array
   and fires KVO (`Source/WebKit/UIProcess/Extensions/Cocoa/WebExtensionCocoa.mm:281-291`).
   Whether the extension object itself is considered successfully parsed is
   governed by `WebExtension::manifestParsedSuccessfully()`, which checks
   only that the manifest JSON parsed as an object
   (`WebExtension.cpp:353-356`, `return !!manifestObject();`) -- it does not
-  consult `m_errors` or check for `InvalidVersion` specifically. The public
-  API doc for the `errors` property says explicitly that callers should
-  monitor it themselves (`Source/WebKit/UIProcess/API/Cocoa/WKWebExtension.h:97-100`).
-  So, as far as this source tree shows, WebKit constructs the extension
-  object regardless, and whether an embedder (Safari) then refuses to
-  install/enable it based on `errors` is host-app policy outside the WebKit
-  repository, not something enforced by the engine itself.
+  consult `m_errors` or check for `InvalidVersion` specifically; the two
+  call sites that treat `manifestParsedSuccessfully()` as a hard failure
+  (`WebExtension.cpp:390`, `:851`) are unrelated to version validation, and
+  the only two places that read `manifestParsedSuccessfully()` to populate
+  a constructor's `outError` (`Source/WebKit/UIProcess/Extensions/Cocoa/WebExtensionCocoa.mm:115-117`,
+  `Source/WebKit/UIProcess/Extensions/glib/WebExtensionGLib.cpp:60-62`) are
+  reached only when the manifest JSON itself failed to parse, not when it
+  parsed but carried an `InvalidVersion` error. `WebExtensionContext::load()`
+  (`Source/WebKit/UIProcess/Extensions/Cocoa/WebExtensionContextCocoa.mm:276-337`)
+  confirms the same at the context level: its only two failure returns are
+  `Error::AlreadyLoaded` and (iOS/visionOS only) `Error::InvalidBackgroundPersistence`;
+  nothing in `load()` reads `errors()`/`m_errors`. The public API doc for the
+  `errors` property is explicit that this is a deliberate hand-off, not an
+  oversight: "Provides an array of all parse-time errors for the extension...
+  If no errors occurred, an empty array is returned"
+  (`Source/WebKit/UIProcess/API/Cocoa/WKWebExtension.h:97-99`), with no stated
+  effect on loading, and `WKWebExtensionController.h`'s
+  `loadExtensionContext:` (`WKWebExtensionController.h:85`) documents no
+  `errors`-based gate either. So this source tree establishes, not merely
+  fails to rule out, that the WebKit engine never blocks on an
+  `InvalidVersion` error at any layer read here: constructing the extension
+  object, parsing its manifest successfully, and loading its context all
+  proceed regardless of `m_errors`' contents. Whether Safari's own
+  application code then reads `errors` and refuses to install or enable the
+  extension is a decision made entirely in Safari's closed application
+  layer, outside any WebKit source available to this task -- not an
+  open question this pass failed to resolve, but a boundary the engine
+  itself documents as belonging to the embedding application.
 
 ## 4. Is comparison observable to extension authors?
 
@@ -366,15 +389,29 @@ exactly as authored, in all three engines:
 | getVersion() | canonicalized base::Version string | not implemented | raw string (same as getManifest().version) |
 | version_name | supported, display only | not implemented (vestigial API field only) | supported, display only, falls back to version |
 
-## Undetermined / out of scope for this source-only pass
+## Not in open source
 
-- Whether Safari (the WebKit embedder) actually refuses to install/enable an
-  extension whose `version` produced an `Error::InvalidVersion`. That policy
-  is not in the open WebKit repository read for this task.
+These are determinate classifications, not gaps this pass failed to close: the
+behavior in question is implemented outside any of the three read-only engine
+trees, in application or store-server code this task has no access to.
+
+- Whether Safari (the WebKit embedder) refuses to install/enable an extension
+  whose `version` produced an `Error::InvalidVersion`. Section 3 above
+  establishes affirmatively that no code path in the WebKit engine itself
+  (extension construction, manifest parsing, or `WebExtensionContext::load()`)
+  consults `m_errors`/`errors()` before proceeding; the `errors` property's own
+  documentation frames it as something for the host application to monitor.
+  That leaves the install/enable decision entirely in Safari's application
+  code, which is closed and not part of the WebKit repository.
 - Whether any comparison logic exists in Safari/App Store tooling outside
-  WebKit's open-source tree for update decisions.
-- Chrome Web Store server-side validation (separate from the Chromium
-  browser binary) was not examined; only browser-side `extensions/common`
-  code was read.
-- AMO (addons.mozilla.org) server-side linting of `version` strings was not
-  examined; only the Gecko browser/toolkit source was read.
+  WebKit's open-source tree for update decisions: WebKit's engine has no
+  `compareVersions`-style code at all (section 2), so if such a comparison
+  happens anywhere for Safari extension updates, it happens in Safari or App
+  Store Connect server-side tooling, neither of which is open source.
+- Chrome Web Store server-side validation (separate from the Chromium browser
+  binary) is store-operator infrastructure, not part of the Chromium
+  repository; only browser-side `extensions/common` code was read, and none of
+  it reaches store-server code by construction.
+- AMO (addons.mozilla.org) server-side linting of `version` strings is
+  likewise store-operator infrastructure outside the Gecko browser/toolkit
+  source tree read for this task.

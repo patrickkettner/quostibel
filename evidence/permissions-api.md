@@ -17,6 +17,11 @@ Chromium:
 - `extensions/browser/permissions/scripting_permissions_modifier.cc`
 - `chrome/browser/extensions/api/developer_private/developer_private_functions.cc`
 - `chrome/common/extensions/api/_api_features.json`
+- `chrome/browser/extensions/chrome_extension_function_details.cc` (`GetNativeWindowForUI`)
+- `tools/json_schema_compiler/model.py` (`ReturnsAsync`/`can_return_promise`)
+- `extensions/renderer/bindings/api_signature.cc` (`ParseCallback`,
+  `BuildReturnsAsyncFromValues`)
+- `extensions/renderer/bindings/api_request_handler.cc` (`GetAsyncResultHandler`)
 
 Gecko:
 - `toolkit/components/extensions/schemas/permissions.json`
@@ -24,15 +29,24 @@ Gecko:
 - `toolkit/components/extensions/ExtensionPermissions.sys.mjs`
 - `toolkit/components/extensions/Extension.sys.mjs`
 - `toolkit/components/extensions/Schemas.sys.mjs`
+- `toolkit/components/extensions/ExtensionCommon.sys.mjs` (`LocalAPIImplementation.callAsyncFunction`,
+  `wrapPromise`)
+- `toolkit/components/extensions/ExtensionWorkerChild.sys.mjs`
+- `toolkit/components/extensions/MatchPattern.cpp` (`ignorePath` handling)
+- `browser/modules/ExtensionsUI.sys.mjs`
+- `browser/components/enterprisepolicies/Policies.sys.mjs`
 
 WebKit:
 - `Source/WebKit/WebProcess/Extensions/Interfaces/WebExtensionAPIPermissions.idl`
 - `Source/WebKit/WebProcess/Extensions/API/Cocoa/WebExtensionAPIPermissionsCocoa.mm`
 - `Source/WebKit/UIProcess/Extensions/Cocoa/API/WebExtensionContextAPIPermissionsCocoa.mm`
 - `Source/WebKit/UIProcess/Extensions/Cocoa/WebExtensionContextCocoa.mm` (requestPermissions,
-  requestPermissionMatchPatterns)
+  requestPermissionMatchPatterns, `permissionsDidChange`, `setGrantedPermissions`)
+- `Source/WebKit/UIProcess/Extensions/WebExtensionContext.cpp` (`setGrantedPermissions`,
+  `permissionState`)
+- `Source/WebKit/UIProcess/Extensions/WebExtensionMatchPattern.h` (`Options`)
 - `Source/WebKit/WebProcess/Extensions/Bindings/Scripts/CodeGeneratorExtensions.pm` (what
-  `MainWorldOnly` actually does)
+  `MainWorldOnly` and `ReturnsPromiseWhenCallbackIsOmitted` actually do)
 
 ## 1. Signature identity: partially holds, not fully
 
@@ -56,6 +70,79 @@ core, same resolved value types (boolean for `contains`/`remove`, `Permissions` 
 - Firefox's `request()` is reachable from content scripts; Chrome's and WebKit's are not (see
   section 5).
 
+## 1a. Trailing callback argument on every method
+
+Verified per browser, per method (`getAll`, `contains`, `request`, `remove`; the two events use
+`addListener`/`removeListener`/`hasListener` and are not part of this claim). All three browsers
+accept an optional trailing callback function and invoke it instead of resolving a promise when
+one is supplied, on all four methods, with no difference between Manifest V2 and Manifest V3.
+
+- **Chrome**: all four methods declare `"returns_async": {"name": "callback", ...}` in the schema
+  (`chrome/common/extensions/api/permissions.json`, `getAll` at the `getAll` function block,
+  `contains`/`request`/`remove` likewise each with their own `returns_async`), and none of the
+  four sets `does_not_support_promises`. `tools/json_schema_compiler/model.py`'s `ReturnsAsync`
+  class computes `can_return_promise = json.get('does_not_support_promises') is None`, so all
+  four are promise-capable by the schema compiler's own model. At the renderer-binding layer
+  (not the schema compiler, which only feeds C++ codegen and documentation), the actual dual
+  dispatch is generic and per-call, not per-manifest-version:
+  `BuildReturnsAsyncFromValues()` sets `promise_support = kSupported` and `optional = true` for
+  any `returns_async` lacking `does_not_support_promises`
+  (`extensions/renderer/bindings/api_signature.cc:39-56`). `ArgumentParser::ParseCallback()`
+  inspects the actual trailing argument at call time: if a function value was passed, `async_type_
+  = kCallback` and that function is invoked; if the argument was omitted and promise support is
+  present, `async_type_ = kPromise` (`api_signature.cc:362-393`). `APIRequestHandler::
+  GetAsyncResultHandler()` only constructs a `v8::Promise::Resolver` (and thus only returns a
+  promise) when `async_type == kPromise`; when a callback was supplied, no promise is created at
+  all (`extensions/renderer/bindings/api_request_handler.cc:587-597`, with an explicit `DCHECK`
+  that a promise-typed call is never started with a callback also present). None of this is
+  gated on `manifest_version`: no such check exists anywhere in `api_signature.cc`,
+  `api_binding.cc`, or `api_request_handler.cc`, and the `permissions`, `permissions.getAll`,
+  `permissions.contains`, `permissions.request`, and `permissions.remove` feature entries in
+  `chrome/common/extensions/api/_api_features.json:809-819` carry no `min_manifest_version` (only
+  the unrelated `permissions.addHostAccessRequest`/`removeHostAccessRequest`, MV3-only, do).
+  Reachability for `permissions`/`permissions.request` was independently confirmed with
+  `python3 ~/crx-audit/harness/lib/feature_reachability.py <key>`: both are `REACHABLE by an
+  ordinary extension` with no manifest-version-conditioned path. So Chrome's dual callback/promise
+  support for all four methods is uniform across MV2 and MV3, contrary to the common assumption
+  that promise support in Chrome's extension APIs is an MV3-only addition; it is a per-function
+  schema property, checked generically at bind time, independent of manifest version.
+- **Firefox**: all four methods declare `"async": "callback"` in the schema
+  (`toolkit/components/extensions/schemas/permissions.json:68,86,109,132`). At the binding layer,
+  `FunctionType.parseSchema()` computes `hasAsyncCallback` when the last declared parameter's name
+  matches `schema.async` (`Schemas.sys.mjs:2651-2673`), true for all four. The generated stub
+  (`FunctionEntry.getDescriptor()`, `Schemas.sys.mjs:3067-3095`) pops the actual last call
+  argument as `callback` only `if (this.hasAsyncCallback)`, then calls
+  `apiImpl.callAsyncFunction(actuals, callback, this.requireUserInput)`. In
+  `LocalAPIImplementation.callAsyncFunction()` (`ExtensionCommon.sys.mjs:1143-1157`), the
+  implementation function is invoked and its result wrapped: `return
+  this.context.wrapPromise(promise, callback)`. `wrapPromise`'s own doc comment states the
+  dispatch plainly: "If callback is null, a promise object belonging to the target scope [is
+  returned]. Otherwise, undefined [is returned and callback is invoked]"
+  (`ExtensionCommon.sys.mjs:870-871`, implemented `:874-899`). No `manifestVersion` check appears
+  anywhere in this call chain (`Schemas.sys.mjs`'s `FunctionType`/`FunctionEntry`,
+  `ExtensionCommon.sys.mjs`'s `callAsyncFunction`/`wrapPromise`), so this is uniform across MV2
+  and MV3 in Firefox as well.
+- **Safari**: `ReturnsPromiseWhenCallbackIsOmitted` is declared once, on the interface itself, not
+  per method (`WebExtensionAPIPermissions.idl:33`, in the same attribute block as
+  `MainWorldOnly`). All four methods' IDL declarations end with `[Optional, CallbackHandler]
+  function callback` as their last parameter (`WebExtensionAPIPermissions.idl:37,40,45,48`).
+  `CodeGeneratorExtensions.pm` resolves the attribute per function as `$function->extendedAttributes
+  ->{"ReturnsPromiseWhenCallbackIsOmitted"} || $interface->extendedAttributes->
+  {"ReturnsPromiseWhenCallbackIsOmitted"}` (line 521), so the interface-level declaration applies
+  to every method on it, including all four here. At generation time, `$returnsPromise =
+  $callbackHandlerArgument && $returnsPromiseIfNoCallback` (line 729): when true, the generated
+  code only builds a deferred JS promise and substitutes it as the callback handler `if
+  (!${callbackHandlerArgument})`, i.e. only when the JS caller did not supply one (lines 736-743);
+  when a real callback was supplied, that value is used directly and no promise is constructed.
+  No `ManifestVersion`-conditioned attribute or check appears anywhere in the `.idl` file or in
+  this code path in `CodeGeneratorExtensions.pm`, so this is uniform across whatever manifest
+  versions WebKit's extension engine supports.
+
+Conclusion: the claim as stated in the draft ("Chrome, Firefox, and Safari... accept a callback
+function as a trailing argument on every method here... instead of returning a promise when
+supplied") holds for all three browsers and all four methods, with no manifest-version-specific
+exception found in any of the three engines' binding/codegen layers.
+
 ## 2. `request()` behavior
 
 ### User gesture
@@ -70,10 +157,25 @@ core, same resolved value types (boolean for `contains`/`remove`, `Permissions` 
   (`Source/WebKit/WebProcess/Extensions/API/Cocoa/WebExtensionAPIPermissionsCocoa.mm:104-108`).
 - **Firefox**: the schema declares `"requireUserInput": true`
   (`toolkit/components/extensions/schemas/permissions.json:106-110`), but the implementation
-  itself in `ext-permissions.js` never inspects gesture state; user-gesture enforcement for
-  `requireUserInput` functions is generic binding-layer behavior, not something visible in
-  `ext-permissions.js`. Not independently confirmed in the files read for this task; flagged as
-  undetermined below.
+  itself in `ext-permissions.js` never inspects gesture state. Confirmed generic: `FunctionType`
+  parses `requireUserInput` into `this.requireUserInput` (`Schemas.sys.mjs`, `FunctionType`
+  constructor) and the generated call stub passes it straight through:
+  `apiImpl.callAsyncFunction(actuals, callback, this.requireUserInput)`
+  (`Schemas.sys.mjs:3067-3095`, `getDescriptor()`). `LocalAPIImplementation.callAsyncFunction()`
+  enforces it before the implementation function is ever called: `if (requireUserInput) { if
+  (!this.context.contentWindow.windowUtils.isHandlingUserInput) { throw new ExtensionError(...)
+  } }` (`ExtensionCommon.sys.mjs:1143-1149`), then only calls `this.pathObj[this.name](...args)`
+  afterward. This is a real gap, not just a caveat: the check reads
+  `this.context.contentWindow`, which a Manifest V3 background service worker context does not
+  have. `ExtensionWorkerChild.sys.mjs`'s own `callAPIImplementation()` dispatcher carries an
+  explicit acknowledgment of this: "TODO (Bug 1728328): follow up to take callAsyncFunction
+  requireUserInput parameter into account (until then callAsyncFunction, callFunction and
+  callFunctionNoReturn calls do not differ yet)" (`ExtensionWorkerChild.sys.mjs:404-408`), and the
+  worker-context call path invokes `impl[requestType](normalizedArgs)` with no
+  `requireUserInput` argument at all. So Firefox's `requireUserInput` enforcement is real and
+  generic for `permissions.request()` called from a background page/extension page context, but
+  is a known, explicitly-commented gap for a call originating from an MV3 background service
+  worker.
 
 ### Active window requirement
 
@@ -139,12 +241,20 @@ namespace from content scripts by two unrelated mechanisms; Firefox deliberately
 
 ### Called from a background service worker with no active window
 
-Undetermined from source read for this task in the Chrome/MV3 case beyond what's stated above:
-`GetNativeWindowForUI()` (`permissions_api.cc:326`) resolves to some browser window associated
-with the profile if one exists anywhere, not necessarily one owned by the caller. A background
-service worker in a browser with at least one open window would not hit the "no active window"
-error; one with literally no browser windows open would. Not traced further into
-`ChromeExtensionFunctionDetails::GetNativeWindowForUI()` itself.
+Resolved. `ChromeExtensionFunctionDetails::GetNativeWindowForUI()`
+(`chrome/browser/extensions/chrome_extension_function_details.cc:82-138`) tries, in order: (1)
+`WindowControllerList::GetInstance()->CurrentWindowForFunction(function_)`; (2) the calling
+function's sender `WebContents`, if it supports modal dialogs; (3) on platforms with app windows,
+an app window belonging to the same extension; (4) as a last resort, `GetAllBrowserWindowInterfaces()`
+filtered to the calling extension's `Profile`, returning the **first** matching window found,
+with no requirement that it have any other relationship to the calling extension or context
+(`chrome_extension_function_details.cc:120-133`). Only if that loop finds zero browser windows in
+the whole profile does the function return an empty `gfx::NativeWindow()`
+(`chrome_extension_function_details.cc:136-138`), which is what `permissions_api.cc:326-329`
+turns into the "Could not find an active window" rejection. So: a background service worker
+calling `permissions.request()` in a profile that has at least one open browser window anywhere
+(even one with no relationship to the calling extension) does not hit this error; the error fires
+only when the calling extension's entire profile has zero open browser windows.
 
 ### Already granted
 
@@ -190,11 +300,18 @@ promise / raise a callback error in all three instead:
   ?.blocked_permissions`, matching Chrome's error string
   ("Permissions are blocked by enterprise policy.") on purpose per the adjoining comment
   (`ext-permissions.js:150-165`).
-- WebKit: no equivalent found. Grepped both `.mm` files read for `policy`/`Policy`; no matches.
-  Undetermined whether WebKit enforces managed configuration for optional permission requests
-  through some other layer not read for this task (e.g. an MDM profile mechanism outside
-  `Source/WebKit/*/Extensions`); the two files that implement `permissionsRequest()` contain no
-  such check.
+- WebKit: **not in open source**. Beyond the two `.mm` files that implement `permissionsRequest()`
+  (already grepped for `policy`/`Policy` with no matches), this pass additionally grepped
+  `WebExtensionContext.cpp`/`.h` (the `permissionState()` five-state machine file) and every
+  `.cpp`/`.h` file under `Source/WebKit/UIProcess/Extensions/` for `policy`/`Policy`/`MDM`/
+  `ManagedConfiguration`. The only hits are unrelated (`content_security_policy` manifest-key
+  handling in `WebExtension.cpp`, and a `decidePolicyForNavigationAction` WKUIDelegate method
+  unrelated to permissions). No managed/MDM-style permission-blocking mechanism exists anywhere
+  in the open-source WebKit extension engine. This is consistent with, not separate from, the
+  finding already in the draft text about `AllowedDomains`/`DeniedDomains`: Apple's public MDM
+  schema for Safari extensions is host/domain-scoped only, and whatever Safari's application does
+  for non-host permissions under a managed policy (if anything) is closed application code, not
+  engine behavior. Classified as not in open source rather than left as a bare "undetermined."
 
 ### Granting host permissions beyond `optional_host_permissions`
 
@@ -279,8 +396,27 @@ independently traced; WebKit: `!pattern || !pattern->isSupported()` produces `ou
 
 Chrome's schema comment explicitly documents path-stripping: "Paths on origin patterns will be
 ignored" (`chrome/common/extensions/api/permissions.json` function description on `request`).
-Not independently re-derived from the parsing code for Firefox/WebKit in this pass; treated as
-documented-but-engine-specific.
+
+Firefox does the same, by a different mechanism, confirmed by source: the validation calls in
+`ext-permissions.js` (`new MatchPattern(origin)`, e.g. `:131,174,237,261`) parse the origin
+path-sensitively, but the storage layer normalizes it away. `ExtensionPermissions.add()`/`.remove()`
+call `new MatchPattern(origin, { ignorePath: true }).pattern` before persisting a granted/removed
+origin (`ExtensionPermissions.sys.mjs`, both functions). `MatchPatternCore`'s constructor
+implements `ignorePath` by truncating the pattern at the end of the host and appending a literal
+`/*`, discarding whatever path text was present (`toolkit/components/extensions/MatchPattern.cpp:336-339`).
+So a granted Firefox origin permission is always stored with an effective path of `/*`, matching
+Chrome's documented behavior in effect, if not in mechanism (Chrome elides the path at the
+comparison/grant-computation step; Firefox elides it at storage time by literal truncation).
+
+WebKit does not do this. `WebExtensionMatchPattern::Options` declares `IgnorePaths` as an option
+(`Source/WebKit/UIProcess/Extensions/WebExtensionMatchPattern.h:69`), but it is a *matching*-time
+option ("Ignore the path component when matching"), and `verifyRequestedPermissions()`'s call to
+`WebExtensionMatchPattern::getOrCreate(origin)` (`WebExtensionAPIPermissionsCocoa.mm:239-247`)
+does not pass it -- the pattern is constructed and stored with whatever path the caller wrote,
+literally. This was not traced further to confirm whether a literal path in an `origins` entry
+changes what gets granted in practice (as opposed to just being stored verbatim); that would
+require tracing how the stored pattern is later compared during `permissionState()` checks, which
+is out of scope for this bounded check.
 
 ### `data_collection`
 
@@ -365,24 +501,60 @@ One explicit exception in Chrome: policy-driven permission changes do **not** fi
 onRemoved for policy-related events. return;`
 (`permissions_event_router.cc:50-53`).
 
-Not independently re-traced for Firefox or WebKit in this pass beyond what the schema/API files
-show: Firefox's event handlers listen for the generic `"change-permissions"` `Management` event
-(`ext-permissions.js:50-99`), which is emitted by `ExtensionPermissions.add()`/`.remove()`
-(`ExtensionPermissions.sys.mjs:476, 541`) -- those are called from the API implementation itself,
-so whether Firefox's own permission-management browser UI (e.g. about:addons) also funnels
-through `ExtensionPermissions.add`/`.remove` (and therefore also fires the events) is
-undetermined from the files read here. WebKit's `firePermissionsEventListenerIfNecessary()`
-(`WebExtensionContextAPIPermissionsCocoa.mm:173-182`) is called from `permissionsRequest()`
-and, per its name, is presumably invoked elsewhere in `WebExtensionContext` for UI-driven grants
-too, but those call sites were not located/read in this pass.
+Resolved for both remaining engines.
+
+**Firefox**: `ExtensionPermissions.add()`/`.remove()` (`ExtensionPermissions.sys.mjs:476,529`,
+emitting `Management.emit("change-permissions", ...)` unconditionally whenever anything was
+actually added/removed, with no "silent" parameter anywhere in either function's signature) are
+called from more than just `ext-permissions.js`. Two non-API call sites confirm both a UI-driven
+and a policy-driven path fire the same event:
+- **UI-driven**: `browser/modules/ExtensionsUI.sys.mjs:609,616` -- Firefox's user-facing
+  extension-permissions UI calls `ExtensionPermissions.add(addon.id, perms)`/
+  `ExtensionPermissions.remove(addon.id, perms)` directly. Also,
+  `toolkit/components/extensions/ExtensionPermissions.sys.mjs`'s `OriginControls.setAlwaysOn()`
+  and `.setWhenClicked()` (the per-site "always allow"/"only when clicked" runtime toggle, i.e.
+  Firefox's analogue to Chrome's site-access UI) call `ExtensionPermissions.add()`/`.remove()`
+  directly (`ExtensionPermissions.sys.mjs:771-818` and `:826-878`).
+- **Policy-driven**: `browser/components/enterprisepolicies/Policies.sys.mjs:1858-1875` --
+  applying an enterprise policy's `blocked_permissions` list calls
+  `ExtensionPermissions.remove(addon.id, {...}, extension)` directly to revoke any now-blocked,
+  previously-granted optional permission. This call goes through the exact same `remove()`
+  function as everything else, with no policy-specific suppression of the emitted event.
+
+So in Firefox, both UI-driven and policy-driven permission changes fire `onAdded`/`onRemoved`,
+the same as an API call would; Firefox has no analogue of Chrome's explicit policy-case
+suppression (see below).
+
+**WebKit**: `firePermissionsEventListenerIfNecessary()` has call sites beyond
+`permissionsRequest()`. It is called from `WebExtensionContext::permissionsDidChange()`
+(`WebExtensionContextCocoa.mm:632-660`, both the `PermissionsSet` and `MatchPatternSet`
+overloads), which is itself called from `WebExtensionContext::setGrantedPermissions()`
+(`WebExtensionContext.cpp:283-308`) and the equivalent setters for denied permissions and for
+granted/denied match patterns (`WebExtensionContext.cpp:316-341,364-402`), i.e. from the engine
+side of the public `WKWebExtensionContext.grantedPermissions`/`.grantedPermissionMatchPatterns`
+properties the embedding application sets. `permissionsDidChange()` fires the event whenever the
+notification is a "were granted"/"were removed" kind, unconditionally -- there is no
+application-driven-vs-API-driven distinction at this layer; any change to those properties, for
+any reason the application has, fires the event. (As an aside, the same
+`permissionsDidChange()`/`firePermissionsEventListenerIfNecessary()` path is also reached from
+`activeTab`'s user-gesture grant and its navigation-triggered revocation,
+`WebExtensionContextCocoa.mm:2306,2334`, confirming this is the general-purpose permission-change
+notification path, not something special-cased for the `permissions` API alone.)
 
 ### Firing in content scripts
 
-Given section 2's finding that the entire `permissions` namespace (Chrome, WebKit) or everything
-except `request()` (Firefox) is excluded from content-script contexts by the same
-context/world-restriction mechanisms already cited, `onAdded`/`onRemoved` listeners are not
-reachable from a content script in any of the three engines. Not separately re-verified beyond
-that inference from the namespace/interface-level restriction already cited in section 2.
+Resolved by necessity from section 2's findings, not by separate source reading: section 2
+establishes, per engine and with its own citations, that a content script cannot reach the
+`permissions` namespace at all in Chrome (feature `contexts` restriction) or WebKit (`MainWorldOnly`
+interface attribute, false for an isolated content-script world), and cannot reach anything on the
+namespace except `request()` in Firefox (`allowedContexts` override on `request` alone; `getAll`,
+`contains`, `remove`, `onAdded`, `onRemoved` fall back to the namespace default, which excludes
+content scripts). A JavaScript property that is unreachable from a given context cannot have a
+listener attached to it from that context; this holds independent of anything else about event
+delivery, since there is no `permissions.onAdded`/`onRemoved` object present in a content script's
+global for `addListener` to be called on in the first place, in any of the three engines. No
+special-case event-delivery mechanism that could bypass this was found in any of the three engines'
+source read for this task.
 
 ## 6. `data_collection`
 
@@ -429,15 +601,25 @@ This set is not stable: see `divergences.md` for the three Safari permission nam
 behind a currently-disabled build flag, any one of which would change the intersection with no
 spec change required.
 
+## Resolved in a later pass (previously undetermined)
+
+- The uncited trailing-callback claim (section 1a): resolved for all three browsers, all four
+  methods, uniform across manifest versions.
+- Firefox's `requireUserInput: true` enforcement mechanism (section 2, "User gesture"): resolved,
+  with a genuine caveat for MV3 background-service-worker callers (open Firefox bug 1728328).
+- Chrome's `GetNativeWindowForUI()` semantics for a background service worker (section 2, "Active
+  window requirement"): resolved.
+- Whether WebKit enforces a managed/MDM-style block on `permissions.request()` (section 2,
+  "Enterprise/managed policy blocking"): classified not in open source, on a broadened search.
+- Whether Firefox's/WebKit's user-facing permission-management UI, and policy-driven changes,
+  fire `onAdded`/`onRemoved` (section 5): resolved for both engines and both triggers.
+- Content-script reachability of `onAdded`/`onRemoved` (section 5): confirmed as a necessary
+  consequence of already-cited facts, not a separate open question.
+- Origin path-stripping in `origins` entries (section 3): resolved for Firefox (yes, at storage
+  time); WebKit's parse-time behavior confirmed (no stripping), its match-time consequence left
+  unchecked as a bounded, explicitly-scoped gap.
+
 ## Undetermined / not independently confirmed in this pass
 
-- Firefox's `requireUserInput: true` enforcement mechanism for `request()` -- schema declares it
-  (`permissions.json:110`), but the generic binding-layer code that enforces it was not read.
-- Chrome's `GetNativeWindowForUI()` semantics when called from a background service worker with
-  browser windows open elsewhere in the profile but none belonging to the invoking extension
-  page -- not traced past the call site in `permissions_api.cc:326`.
-- Whether WebKit enforces any managed/MDM-style block on `permissions.request()` through a layer
-  outside `Source/WebKit/*/Extensions` (the two files that implement it show no such check).
-- Whether Firefox's or WebKit's user-facing permission-management UI (about:addons; the app's own
-  extension settings) fires `onAdded`/`onRemoved` the way Chrome's `chrome://extensions` UI does
-  -- only Chrome's UI-to-event path was traced end to end.
+No items remain in this category for this document as of the most recent pass; see "Resolved in
+a later pass" above for what was previously listed here.

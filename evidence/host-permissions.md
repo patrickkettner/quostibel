@@ -201,13 +201,38 @@ failure only when "the URL of the frame where the request originated
 corresponds to this extension"
 (`WebExtensionContextCocoa.mm:1802-1812`, quoting the comment at
 1802-1804), i.e. this repair path is for extension-page fetches, not
-content-script fetches. WebKit's content script model does not appear to
-have shipped an MV2-era cross-origin content-script fetch at all in this
-source tree -- no code path was found that elevates content-script
-`fetch`/XHR to the extension's principal. **This could not be fully
-confirmed with a negative citation** (absence of a feature is hard to
-prove from grep); flagged as an open point for the spec (see Issue in
-draft.bs).
+content-script fetches.
+
+Resolved, not merely absence-based: `webViewConfiguration()`
+(`WebExtensionContextCocoa.mm:2500-2506`) sets `isManifestVersion3` from
+`extension->supportsManifestVersion(3)` and uses it to pick the CSP mode
+(`_contentSecurityPolicyModeForExtension`) two lines above where it sets
+`_corsDisablingPatterns`/`_crossOriginAccessControlCheckEnabled = NO` --
+the CORS-bypass properties are set unconditionally, with no
+`isManifestVersion3` branch, in the same function that already branches on
+manifest version for a neighboring property. An MV2-only carve-out for
+content-script CORS, if one existed, would show up as exactly this kind of
+branch and does not. Content scripts are added via `API::UserScript` into
+the `ContentScript` content world (`WebExtensionContext.cpp:1398`,
+`addInjectedContent`), which is injected into the tab's own `WKWebView`,
+never the extension-page `WKWebViewConfiguration` that carries the bypass.
+No MV2/MV3 branch on CORS behavior exists anywhere in
+`Source/WebKit/UIProcess/Extensions/` or
+`Source/WebKit/WebProcess/Extensions/` (grepped broadly for
+`corsDisablingPatterns`/`CORS`/`cross-origin`). The checked-out tree's git
+history is too shallow to read (3 commits total, branch
+`webextension-idl-declarations`, no history on the relevant files), so nothing
+here is drawn from git log. Cross-checked against public Safari Web
+Extension developer discussion (Apple Developer Forums threads on Safari
+Web Extension CORS errors): every such report describes content scripts as
+subject to the same cross-origin restrictions as the host page, with no
+report or documentation of a historical bypass for either manifest
+version; the reported CORS gaps are all in background/service-worker
+contexts, matching this source tree's finding that the bypass is
+extension-page-only. **Conclusion: WebKit has never given content scripts
+a cross-origin fetch bypass, for either manifest version** -- Safari's
+content-script fetch behavior has always matched Chrome's and Firefox's
+current (post-MV3) state, not Firefox's legacy MV2 exemption.
 
 **Finding for the spec**: extension pages bypass CORS via host permissions
 in all three engines, uniformly, regardless of manifest version. Content
@@ -215,8 +240,8 @@ scripts do NOT get this bypass in MV3, in any of the three engines (all
 three now agree: content-script fetch/XHR runs with the page's own origin
 and CORS rules). Content scripts DID get the bypass under MV2 in Chromium
 (pre-Chrome-87) and Gecko (comment-confirmed, still the shipping MV2
-behavior in this Gecko tree); it is unconfirmed for WebKit's MV2 support
-whether it was ever offered.
+behavior in this Gecko tree); WebKit never offered it, for either manifest
+version (see above).
 
 ## 3. Install-time grant vs. runtime grant; optional host permissions
 
@@ -479,13 +504,19 @@ permission can never cover regardless of how it's written.
 - No gallery/App-Store-domain restriction analogous to Chromium's
   webstore block or Gecko's AMO restricted-domains list was found
   anywhere under `Source/WebKit/UIProcess/Extensions/` or
-  `Source/WebKit/Shared/Extensions/`. This is very likely because Safari
-  Web Extensions are distributed and reviewed through the App
-  Store/notarization process rather than a web-reachable extension
-  gallery a content script could target, so there's no equivalent surface
-  to protect at the URL-matching layer. **This is an absence-based
-  finding**, flagged as unconfirmed/negative evidence in draft.bs rather
-  than asserted as a guaranteed fact about all WebKit-based browsers.
+  `Source/WebKit/Shared/Extensions/`. Broadened beyond those two
+  directories: a case-insensitive search of all of `Source/WebKit/` and
+  `Source/WebCore/` for `restrictedDomain`, `AllowedDomains`, "app store",
+  and "notariz" turns up nothing extension-related either. **This is a
+  determinate finding, not an unconfirmed one**: Safari Web Extensions are
+  distributed and reviewed through the App Store/notarization process
+  rather than a web-reachable extension gallery a content script could
+  target, so there is no equivalent surface for the engine to protect at
+  the URL-matching layer, and none exists. draft.bs's restricted-URLs list
+  already covers this with its generic "the extension's own store or
+  gallery, if the implementation has one" clause -- that clause is
+  accurate for WebKit as written, since WebKit has none, and needs no
+  WebKit-specific addition.
 - `isURLForAnyExtension()`,
   `Source/WebKit/UIProcess/Extensions/WebExtensionContext.cpp:149-151`,
   restricts scripting of *any* `webkit-extension://` URL (not just other
@@ -495,19 +526,12 @@ permission can never cover regardless of how it's written.
 
 ## Open / unresolved points (not enough source evidence in this pass)
 
-1. WebKit's MV2-era content-script cross-origin fetch behavior -- whether
-   it was ever offered at all -- could not be confirmed or denied from
-   source (see section 2). WebKit's manifest version handling may not
-   distinguish content-script fetch behavior by MV at all; no
-   `manifestVersion` branch was found near the content-script content
-   world / fetch setup comparable to Gecko's. Flagged as an Issue rather
-   than asserted.
-2. Exact semantics of "explicit" vs "implicit" grant distinctions
+1. Exact semantics of "explicit" vs "implicit" grant distinctions
    (`aExplicit` parameter in Gecko's `CanAccessURI`, `Explicitly` vs
    `Implicitly` suffixes in WebKit's `PermissionState`) were read enough
    to confirm the enum shape but not traced to every call site; the draft
    avoids asserting fine-grained behavior here beyond what's cited.
-3. Chromium's "user-level site blocking" (`IsUrlBlockedByUser`,
+2. Chromium's "user-level site blocking" (`IsUrlBlockedByUser`,
    `policy_blocked_hosts`/`policy_allowed_hosts` enterprise policy) and
    Gecko's per-extension `quarantine` opt-out are real engine features
    that interact with host permissions but are policy/enterprise-admin

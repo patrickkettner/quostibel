@@ -175,9 +175,12 @@ case of an empty `version`, which the normative requirement above
     value retained, not rejected and not treated as though the key were
     absent.
 * Safari: the engine records an error for an empty or otherwise
-    unparseable value but does not itself refuse to load the extension.
-    Whether the Safari application blocks installation on that error is
-    unconfirmed.
+    unparseable value but does not itself refuse to load the extension; this
+    is by the engine's own documented design, which defers the decision to
+    the embedding application rather than leaving it unimplemented. Whether
+    Safari itself then blocks installation on that error is a decision made
+    in Safari's own application code, which is not part of any open source
+    tree.
 
 In no case examined is an invalid or empty `version` treated as though
 the key were simply absent from the manifest.

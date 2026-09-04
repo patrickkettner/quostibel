@@ -460,22 +460,84 @@ of extension contexts, roughly the WebKit analog of a profile).
   guessable/stable across launches depends entirely on the embedding app's
   choice, per point 3.
 
-## Open / undetermined points
+## Resolved points, formerly open
 
-- Store-side (Chrome Web Store / addons.mozilla.org / App Store Connect)
-  enforcement of ID uniqueness across all published extensions is not in any
-  of these source trees; only the local/profile-scoped mechanisms above are
-  backed by source read for this task.
-- Whether Safari itself (as opposed to generic WebKit) assigns and persists
-  a stable uniqueIdentifier per installed extension, and what scheme name it
-  substitutes for the open-source default webkit-extension (index.bs already
-  lists safari-web-extension as an example extension scheme, which is
-  Safari-app-level configuration not present in the WebKit tree read here)
-  is Safari application code, not visible in the WebKit tree. Not claimed here
-  beyond what WKWebExtensionContext.h (a public, cross-app API surface)
-  documents.
-- Chromium's exact bindings-layer code path that copies the calling
-  extension's ID into chrome.runtime.id at runtime (as opposed to the
-  schema declaration establishing that the property exists and its type)
-  was not traced into the V8 bindings generator; the schema citation and
-  Extension::id() are given as the two ends of that chain.
+- **Store-side ID-uniqueness enforcement: not in open source.** Chrome Web
+  Store, addons.mozilla.org, and App Store Connect are server-side
+  distribution backends; none of their code is checked into the Chromium,
+  Gecko, or WebKit trees read for this task (these are browser-source
+  checkouts, not store-backend repositories, so there is nothing in them to
+  find). Only the local/profile-scoped derivation and collision-avoidance
+  mechanisms documented above are backed by source read for this task.
+  Classification: not in open source.
+
+- **Whether WebKit's own engine generates and persists a default
+  uniqueIdentifier, versus Safari's specific choice of identifier and
+  scheme: these are two different questions with two different answers.**
+  WebKit's own default-generation behavior is fully resolved from source
+  (see point 3 above): a fresh random UUIDv4 is generated every time a
+  `WebExtensionContext` is constructed
+  (`Source/WebKit/UIProcess/Extensions/WebExtensionContext.h:1095`), it is
+  never itself persisted to disk by the engine, and it is stable across
+  launches only if the embedding application calls `setUniqueIdentifier`
+  with a value the application generates and persists itself before each
+  `load()` (`Source/WebKit/UIProcess/Extensions/WebExtensionContext.cpp:154-165`,
+  guarded by `ASSERT(!isLoaded())`). That much is resolved and open-source.
+
+  Scheme substitution is also resolved as a *mechanism*, open-source:
+  `webkit-extension` is the engine's own built-in default scheme, held in a
+  static set (`WebExtensionMatchPattern::extensionSchemes()`/
+  `validSchemes()`/`supportedSchemes()`,
+  `Source/WebKit/UIProcess/Extensions/WebExtensionMatchPattern.cpp:50-64`).
+  A second scheme, such as Safari's `safari-web-extension`, is added to
+  those same sets only by an explicit runtime call from the embedding app
+  to `+[WKWebExtensionMatchPattern registerCustomURLScheme:]`
+  (`Source/WebKit/UIProcess/API/Cocoa/WKWebExtensionMatchPattern.h:83`,
+  implemented at
+  `Source/WebKit/UIProcess/API/Cocoa/WKWebExtensionMatchPattern.mm:54-59`
+  calling `WebExtensionMatchPattern::registerCustomURLScheme`,
+  `WebExtensionMatchPattern.cpp:94-103`). The header comment states this
+  plainly: "This method should be used to register any custom URL schemes
+  used by the app for the extension base URLs, other than
+  `webkit-extension`" (`WKWebExtensionMatchPattern.h:77-82`). No call site
+  for `registerCustomURLScheme:` exists anywhere in the WebKit tree itself
+  (grepped the whole tree; the only occurrences are the declaration and
+  definition) -- it exists to be called by an embedding app, and is never
+  invoked from within WebKit's own code.
+
+  What remains genuinely closed: whether Safari specifically calls
+  `setUniqueIdentifier`/`registerCustomURLScheme:` (rather than relying on
+  WebKit's own UUID/`webkit-extension` defaults), what concrete identifier
+  and scheme string it passes, and whether/how it persists that value
+  across launches on disk. That is Safari application code, not present in
+  the WebKit tree read here. Classification: mechanism resolved
+  (open-source); Safari's specific runtime choice is not in open source.
+
+- **Chromium's `chrome.runtime.id` bindings-layer path: resolved,
+  traced end to end.** `chrome.runtime.id` is registered as a V8 "native
+  data property" (an accessor, not a plain value) by
+  `RuntimeHooksDelegate::InitializeTemplate`:
+
+      object_template->SetNativeDataProperty(gin::StringToSymbol(isolate, "id"),
+                                             &GetExtensionId, &EmptySetter);
+
+  (`extensions/renderer/api/runtime_hooks_delegate.cc:469-470`). The getter,
+  `GetExtensionId` (`runtime_hooks_delegate.cc:56-70`), resolves the calling
+  `ScriptContext` from the V8 property access's creation context via
+  `GetScriptContextFromV8Context(context)`, then returns
+  `script_context->extension()->id()` -- the same `Extension::id()`
+  accessor already cited in point 1 above -- converted to a V8 string with
+  `gin::StringToSymbol`. So the full chain is: schema declares `id` as a
+  string property with no static `"value"`
+  (`extensions/common/api/runtime.json:312-315`) -> the runtime API's hooks
+  delegate installs a native accessor for it at template-initialization
+  time -> the accessor reads the per-context `Extension` object's `id()`
+  at access time, not at template-creation time, so each extension's own
+  script context sees its own ID.
+
+  A sibling accessor at the same call site, `dynamicId`
+  (`runtime_hooks_delegate.cc:472-473,74-87`), reads `extension()->guid()`
+  instead -- this is the same per-install random `ExtensionGuid` already
+  documented in point 4 above (the `use_dynamic_url` mechanism), confirming
+  from the renderer side that it is a deliberately separate value from
+  `id()`, not an alternate name for it. Classification: resolved.
