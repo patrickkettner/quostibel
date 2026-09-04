@@ -217,6 +217,25 @@ diverge from.
 
 ## 3. Invalid version: rejected at load, or ignored?
 
+None of the three engines treats an empty `version` as equivalent to the
+key being absent. Confirmed directly for Chromium: `Extension::LoadVersion`
+reads the key with `manifest_->FindStringPath(keys::kVersion)`
+(`extensions/common/extension.cc:696`), which returns `nullptr` only when
+the key itself is missing; a present-but-empty string returns a non-null
+pointer to `""`, which is then handed to `base::Version("")` and fails to
+parse (`base::StringToUint` rejects an empty piece,
+`base/version.cc:40-43`) -- the empty-string case and the absent-key case
+take different code paths and both end in `LoadVersion` returning `false`,
+but for different reasons. Gecko's schema marks `version` `"optional": false`
+(`manifest.json:55-59`), so a missing key is a distinct schema-required-property
+failure from an empty-but-present string, which reaches `versionString()`
+and is accepted (see below). WebKit reads the key with a bare `getString`
+that returns an empty `String` both when the key is absent and when its
+value is `""` (`WebExtension.cpp:944`), so WebKit's own code does not
+distinguish "absent" from "empty" at all -- both trip the same
+`m_version.isEmpty()` check and the same `Error::InvalidVersion`
+(`WebExtension.cpp:953-954`).
+
 - Chromium: rejected. `Extension::LoadVersion`
   (`extensions/common/extension.cc:696-704`) returns `false` when the key is
   missing, unparseable, or has more than 4 components, setting

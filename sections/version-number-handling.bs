@@ -160,14 +160,27 @@ A [=version string=] that does not [=parse a version string|parse=] is
 invalid.
 
 <div class=issue>
-Implementations disagree on the consequence:
+Implementations disagree on the consequence, including for the specific
+case of an empty `version`, which the normative requirement above
+([[#version-handling-key-version]]) already forbids:
 
-* Chrome: the extension fails to load, with an install error.
-* Firefox: the extension loads. Any non-empty string is used as-is, with
-    a console warning when it does not match the documented preferred grammar. An
-    empty string is also accepted.
-* Safari: the engine records an error but does not itself refuse to load
-    the extension. Whether Safari blocks installation is unconfirmed.
+* Chrome: the extension fails to load, with an install error. An empty
+    string is included in this: it fails to parse the same as any other
+    unparseable value, so it is rejected, not treated as though the key
+    were absent.
+* Firefox: the extension loads. Any string is used as-is, including an
+    empty one, with a console warning when it does not match the
+    documented preferred grammar. Firefox does not conform to the
+    non-empty requirement above: an empty `version` is accepted and its
+    value retained, not rejected and not treated as though the key were
+    absent.
+* Safari: the engine records an error for an empty or otherwise
+    unparseable value but does not itself refuse to load the extension.
+    Whether the Safari application blocks installation on that error is
+    unconfirmed.
+
+In no case examined is an invalid or empty `version` treated as though
+the key were simply absent from the manifest.
 
 Two questions are open:
 

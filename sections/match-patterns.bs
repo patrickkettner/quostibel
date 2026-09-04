@@ -153,13 +153,17 @@ browser's own permission or content-script matching code uses it).
 
 Issue: The path component of a match pattern is matched against the
 URL's path and query string together (that is, against `pathname +
-search`) in Chrome and Firefox. Safari aligned this behavior as of Safari
-Technology Preview 192, confirmed by a WebKit engineer in
+search`) in Chrome and Firefox. A WebKit engineer commented in
 [w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942)
-(see also [WebKit bug 273069](https://bugs.webkit.org/show_bug.cgi?id=273069)):
-this rests on an engineer's comment that a bug was fixed, not on an
-executed cross-browser test, so it is read here as resolved in practice
-rather than as a formal group resolution; #580 remains open.
+(see also [WebKit bug 273069](https://bugs.webkit.org/show_bug.cgi?id=273069))
+that Safari Technology Preview 192 aligned this behavior with Chrome and
+Firefox. The WebKit engine source available for this specification does
+not show that alignment: its match-pattern path matching reads only the
+URL's path, with the query string excluded. Whether that is because the
+source available here predates Safari Technology Preview 192, or the fix
+described in the comment lives somewhere this source does not cover, is
+not established. Treat Safari's alignment on this point as unconfirmed
+rather than resolved in practice; #580 remains open.
 
 Issue: Percent-encoding is handled inconsistently. Chrome decodes
 percent-encoded octets in both the URL and the pattern's |path| before

@@ -434,13 +434,47 @@ produced by that existing algorithm, and must not contradict it.
    comparison). Gecko: not determined (no explicit unescape call found in
    `MatchPattern.cpp`; would require tracing into `nsIURI`/`nsStandardURL`
    to be certain, out of scope for the three files this task named).
-9. Query string inclusion in path matching -- Chromium and Gecko both
-   include the query string (fragment excluded) as part of what the path
-   pattern matches against. WebKit's source only reads `URL::path()`, a
-   distinct accessor from `query()`; the draft flags this as
-   "apparently excludes the query string" rather than fully confirmed,
-   since no test exercises a literal unescaped `?` query separator
-   end-to-end.
+9. Query string inclusion in path matching -- confirmed directly for all
+   three engines, not inferred:
+   - Chromium: `URLPattern::MatchesURL` compares against
+     `test.PathForRequest()` (`extensions/common/url_pattern.cc:461-467`),
+     and `GURL::PathForRequest`/`PathForRequestPiece`
+     (`url/gurl.cc:411-431`) spans from the path start through the end of
+     the query component (clipped only at a `#` fragment). Query string
+     included.
+   - Gecko: `URLInfo::Path()` calls `URINoRef()->GetPathQueryRef(mPath)`
+     (`toolkit/components/extensions/MatchPattern.cpp:152-157`), an
+     nsIURI method that returns path+query with the ref already stripped
+     by `URINoRef()`; `MatchPattern::Matches` matches `mPath` against
+     `aURL.Path()` (`MatchPattern.cpp:413`). Query string included.
+   - WebKit: `WebExtensionMatchPattern::matchesURL` calls
+     `pattern().matchesPath(urlToMatch)`
+     (`Source/WebKit/UIProcess/Extensions/WebExtensionMatchPattern.cpp:387`),
+     where `pattern()` is a `UserContentURLPattern`
+     (constructed from the same string, `WebExtensionMatchPattern.cpp:198`).
+     `UserContentURLPattern::matchesPath(const URL& url)` calls
+     `url.path().toStringWithoutCopying()`
+     (`Source/WebCore/page/UserContentURLPattern.h:77`). `URL::path()` and
+     `URL::query()` are separate accessors in WTF's URL
+     (`Source/WTF/wtf/URL.h:155,157`); `URL::path()`'s implementation
+     returns the substring ending at `m_pathEnd`, and `URL::query()`
+     returns the substring starting at `m_pathEnd + 1`
+     (`Source/WTF/wtf/URL.cpp:403-416`) -- mutually exclusive spans by
+     construction. So in this source, WebKit's match-pattern path
+     matching reads only the path and does **not** include the query
+     string. This directly contradicts the "Safari aligned as of STP 192"
+     claim from the WebKit engineer's comment on
+     [w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942):
+     either the STP 192 fix is not present in the WebKit tree read for
+     this task (checked-out branch `webextension-idl-declarations`, tip
+     commit dated 2026-08-15; `git log` on `UserContentURLPattern.cpp`/`.h`
+     shows only a single, unrelated tooling commit touching those files,
+     which is consistent with a shallow or partial history and does not
+     establish the file's real age), or the change described in the
+     comment lives in code this task did not examine. Neither is
+     established from this tree; the source read here shows exclusion,
+     not inclusion, and that is reported as what was found, not as proof
+     the STP 192 claim is false.
 10. IPv6 bracket storage -- Chromium and WebKit keep the brackets in
     the stored host; Gecko strips them. Not expected to be
     externally observable, noted for completeness only, not drafted as
