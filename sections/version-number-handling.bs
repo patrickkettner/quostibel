@@ -29,7 +29,7 @@ The value must be a non-empty [=string=].
 Should this specification require Chrome's strict grammar for `version`, or scope the key to
 the loosest grammar all three already accept without a warning?
 
-The accepted grammar differs today:
+Grammar accepted today:
 
 * Chrome: 1 to 4 dot-separated integers. No leading zero in the first
     component; a leading zero in a later component is accepted and
@@ -49,14 +49,12 @@ Tracked at [w3c/webextensions#283](https://github.com/w3c/webextensions/issues/2
 
 An optional [=string=] providing a version to show to users in place of
 [[#version-handling-key-version|`version`]], for example to include a channel qualifier such
-as "1.2 beta". It has no effect on [=extension version comparison=] and is
+as "1.2 beta". It has no effect on [=compare two version strings|version comparison=] and is
 not required to follow the [=version string=] grammar. The key is
 OPTIONAL, and an implementation MAY ignore it.
 
 <div class=note>
-Firefox does not implement `version_name` as a manifest key: no
-manifest schema property exists for it, and no code path in the
-extension manifest or management APIs ever sets or reads it. This makes
+Firefox does not implement `version_name` as a manifest key. This makes
 `version_name` a two-of-three feature: Chrome and Safari support it as
 display text that falls back to `version` when absent or empty. Firefox
 has stated the omission is deliberate, not an oversight: bugzilla
@@ -76,7 +74,7 @@ An extension's <dfn>version string</dfn> is the value of its
 To <dfn>parse a version string</dfn> given |input|:
 
 1. Let |parts| be the result of [=strictly split|strictly splitting=] |input| on U+002E (.).
-1. If |parts|'s [=list/size=] is 0, return failure.
+1. If |parts| contains the empty string, return failure.
 1. Let |components| be an empty <a data-link-type="dfn" data-link-spec="infra">list</a>.
 1. For each |part| of |parts|:
     1. If |part| does not consist entirely of ASCII digits, return failure.
@@ -91,21 +89,20 @@ To <dfn>parse a version string</dfn> given |input|:
 </div>
 
 <div class=issue>
-Must an implementation reject an unparseable `version`? Is the number of components capped
-(Chrome allows at most 4)? Is each component's value capped (Chrome allows 0 to 4294967295)?
+* Is the number of components capped (Chrome allows at most 4)?
+* Is each component's value capped (Chrome allows 0 to 4294967295)?
 
-This algorithm follows Chrome's grammar, the strictest of the three. Firefox and Safari do not
-reject a version string that fails it; both store the value unchanged.
+Firefox and Safari accept a version string that fails this algorithm, storing the value
+unchanged.
 </div>
 
 ## Comparing version strings ## {#version-comparison}
 
-To <dfn>compare two version strings</dfn> |versionA| and |versionB|:
+To <dfn>compare two version strings</dfn> given |versionA| and |versionB|:
 
 1. Let |a| be the result of [=parse a version string|parsing=] |versionA|.
 1. Let |b| be the result of [=parse a version string|parsing=] |versionB|.
-1. If |a| or |b| is failure, [=version comparison=] is not defined by this
-    algorithm; behavior is implementation-defined (see Issue below).
+1. If |a| or |b| is failure, return failure.
 1. Let |n| be the larger of |a|'s and |b|'s [=list/size=].
 1. For each |i| in the range 0 to |n|, exclusive:
     1. Let |x| be |a|[|i|] if |i| is less than |a|'s [=list/size=],
@@ -115,6 +112,11 @@ To <dfn>compare two version strings</dfn> |versionA| and |versionB|:
     1. If |x| is greater than |y|, return "|versionA| is newer".
     1. If |x| is less than |y|, return "|versionB| is newer".
 1. Return "equal".
+
+<div class=note>
+This algorithm returns failure when either input does not parse. What a user agent does with
+that failure is a consequence of [[#invalid-version-strings]], not of this algorithm.
+</div>
 
 <div class="example">
 Comparing `"1.2"` and `"1.2.0"` returns "equal": the missing third
@@ -144,8 +146,7 @@ newer, for two version strings both accept without error.
 Should this specification require one version-comparison algorithm, permit either of the two
 in use today, or leave comparison implementation-defined and unobservable to extensions?
 
-The algorithm above is Chrome's numeric tuple compare, the simplest of the three. Firefox and
-Safari differ:
+Chrome's comparator performs the numeric tuple compare given above. Firefox and Safari:
 
 * Firefox: compares each part as a number followed by a string, so it
     can order pairs Chrome cannot compare at all, such as `1.0a1`
@@ -160,14 +161,15 @@ Safari differ:
 ## Invalid version strings ## {#invalid-version-strings}
 
 A [=version string=] that does not [=parse a version string|parse=] is
-invalid.
+invalid. Chrome, Firefox, and Safari each treat an invalid or empty
+`version` differently from an absent key.
 
 <div class=issue>
 Must an implementation reject an extension whose `version` is invalid, and if so, is the whole
 extension rejected, or only the key?
 
-Implementations disagree on the consequence today, including for the specific
-case of an empty `version`, which the normative requirement above
+The consequence today, including for the specific case of an empty
+`version`, which the normative requirement above
 ([[#version-handling-key-version]]) already forbids:
 
 * Chrome: the extension fails to load, with an install error. An empty
@@ -188,8 +190,6 @@ case of an empty `version`, which the normative requirement above
     in Safari's own application code, which is not part of any open source
     tree.
 
-In no case examined is an invalid or empty `version` treated as though
-the key were simply absent from the manifest.
 </div>
 
 ## Observability to extensions ## {#version-observability}

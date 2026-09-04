@@ -52,8 +52,8 @@ first `://`.
 
 The literal scheme values `http`, `https`, `file`, and `ftp`, plus a browser's own [=extension
 scheme=], are valid |scheme| values in Chrome, Firefox, and Safari alike. `http`, `https`,
-`file`, and `ftp` are four of the URL Standard's six [=special schemes=]; the other two, `ws`
-and `wss`, come up in the divergences below. `data` is not a special scheme, which matters for
+`file`, and `ftp` are four of the URL Standard's six [=special schemes=]; the other two are `ws`
+and `wss`. `data` is not a special scheme, which matters for
 [[#all-urls]]: Firefox is the only one of the three browsers that includes `data` in
 `<all_urls>`.
 
@@ -61,9 +61,9 @@ and `wss`, come up in the divergences below. `data` is not a special scheme, whi
 Which schemes, beyond `http`, `https`, `file`, `ftp`, and a browser's own [=extension scheme=],
 does a match pattern's scheme component accept? Firefox additionally accepts `ws`, `wss`, and
 `data`. Chrome additionally accepts `ws`/`wss` for `host_permissions` (but not for
-`content_scripts.matches`) and its own `chrome://` WebUI scheme (policy/enterprise contexts
-only). Safari accepts none of `ws`, `wss`, `data`, or a WebUI-equivalent scheme in a match
-pattern at all.
+`content_scripts.matches`) and, only in a non-default developer configuration, its own
+`chrome://` scheme. Safari accepts none of `ws`, `wss`, `data`, or an equivalent internal-pages
+scheme in a match pattern at all.
 </div>
 
 If |scheme| is `*`, the pattern matches a fixed, implementation-defined
@@ -151,11 +151,7 @@ and query together?
 
 Chrome and Firefox match it against the URL's [=path=] and [=query=] string together (that is,
 against `pathname + search`). Safari matches it against the [=path=] alone; the [=query=]
-string is excluded. In
-[w3c/webextensions#580](https://github.com/w3c/webextensions/issues/580#issuecomment-2070916942),
-an Apple engineer stated in April 2024 that a bug was fixed in Safari Technology Preview 192,
-without naming the behavior it concerned, so that comment cannot be read either way as a
-statement about query-string matching.
+string is excluded.
 </div>
 
 <div class=issue>
@@ -184,10 +180,8 @@ The special match pattern `<all_urls>` matches all URLs whose [=scheme=] is
 in a permitted set of schemes, regardless of [=url/host=] or [=path=]. `http` and `https` are in that set
 in every engine, in every context that defines one.
 
-Beyond `http` and `https`, the permitted scheme set for `<all_urls>` is the largest three-way
-divergence in this area, and it is not merely a different literal list: the rows below are the
-URL Standard's six [=special schemes=] plus `data`, and the *shape* of which ones each browser
-includes differs.
+Beyond `http` and `https`, each browser permits a different subset of the URL Standard's six
+[=special schemes=] plus `data` for `<all_urls>`:
 
 <table class=simple>
 <thead>
@@ -201,8 +195,8 @@ includes differs.
 <tr><td>`data`<td>no<td>yes<td>no
 </table>
 
-Each browser's `<all_urls>` also includes that browser's own [=extension scheme=], shared by
-all of its extensions, except Chrome's, which never does.
+Safari's `<all_urls>` also includes its own [=extension scheme=], shared by all of its
+extensions. Chrome's and Firefox's do not.
 
 <div class=issue>
 Should `<all_urls>` cover a single portable scheme set across browsers, or leave `file:` and
@@ -220,7 +214,7 @@ Given a `content_scripts.matches` list of `["<all_urls>"]`:
 <tr><td>`https://example.com/`<td>runs<td>runs<td>runs
 <tr><td>`ftp://example.com/`<td>runs<td>runs<td>does not run
 <tr><td>`data:text/html,...`<td>does not run<td>runs<td>does not run
-<tr><td>`file:///home/user/x.html`<td>runs<td>runs<td>runs only if file access has separately been granted
+<tr><td>`file:///home/user/x.html`<td>runs only if file access has separately been granted<td>runs only if file access has separately been granted<td>runs only if file access has separately been granted
 </table>
 </div>
 
@@ -252,20 +246,17 @@ To <dfn>parse a match pattern</dfn> given |input|:
 1. Return a [=match pattern=] whose |scheme| is |scheme|, whose |host|
     is |host|, and whose |path| is |path|.
 
-A `file` match pattern's |host| is not merely omitted from the input, it
-is never read as a host at all: whatever text appears between `file://`
-and the next `/`, if any, is discarded rather than validated. This
-matches the [[#match-pattern-host|existing description]] of `file`
-match patterns. It is a separate question from why the
-[[#match-pattern-matching-algorithm]] below skips |path| comparison for
-a `file` |pattern|, which this algorithm does not change.
+A `file` match pattern's |host| is never read as a host at all: whatever
+text appears between `file://` and the next `/`, if any, is discarded
+rather than validated. [[#match-pattern-matching-algorithm]] separately
+skips |path| comparison for a `file` |pattern|.
 
 <div class="example">
 `<all_urls>` and `https://*.example.com/*` both parse successfully.
 `example.com/*` (no `://`) and `https://example.com` (no |path|) both
 fail to parse. `http://example.com:8080/*` also fails to parse; see
-[[#match-pattern-host]] for the open question of whether match
-patterns need a port component at all.
+[[#match-pattern-host]] for whether match patterns take a port
+component.
 </div>
 
 ## Matching algorithm ## {#match-pattern-matching-algorithm}
@@ -283,7 +274,7 @@ To determine whether a [=match pattern=] |pattern| matches a URL |url| for a man
 1. Let |url record| be the result of [=basic URL parser|parsing=] |url|.
 1. If |pattern| is `<all_urls>`:
     1. If the [=scheme=] of |url record| is in the permitted scheme set
-        for `<all_urls>` given |surface| (see above), return true.
+        for `<all_urls>` given |surface| (see [[#all-urls]]), return true.
     1. Otherwise, return false.
 1. If |pattern|'s [=match pattern/scheme=] is `*`:
     1. If the [=scheme=] of |url record| is not one of the schemes `*` expands to for
@@ -295,7 +286,7 @@ To determine whether a [=match pattern=] |pattern| matches a URL |url| for a man
     [=match pattern/host=], return false.
 1. If |pattern|'s [=match pattern/scheme=] is not `file`, and
     |pattern|'s [=match pattern/path=] does not match the [=path=] of
-    |url record| (see the path matching notes above for what "path"
+    |url record| (see [[#match-pattern-path]] for what "path"
     includes), return false.
 1. Return true.
 
@@ -333,22 +324,21 @@ Firefox's `*` scheme wildcard additionally covers `ws`/`wss`.
 A match pattern string that does not [=parse a match pattern|parse=]
 does not match any URL.
 
-<div class=issue>
-Must the consequence of an unparseable match pattern be uniform across manifest keys, and if
-so, which behavior applies?
-
-What a user agent does beyond dropping the match, on encountering such a string in a manifest,
-depends on which manifest key contains it, and differs by browser today.
-
 For a permission-bearing key (`permissions`, `host_permissions`,
-`optional_permissions`, `optional_host_permissions`), Chrome, Firefox,
-and Safari alike drop the one unparseable entry and load the extension
-with the rest of the list; Chrome and Firefox additionally record a
-warning, Safari does not.
+`optional_permissions`, `optional_host_permissions`), an unparseable
+entry is dropped and the extension loads with the rest of the list.
 
-For `content_scripts.matches`, Chrome and Firefox instead refuse to
-load the extension at all when any one entry fails to parse. Safari
-drops only the unparseable entry (or, if every entry in one content
-script definition fails, that definition) and still loads the
-extension.
+<div class=issue>
+Should a user agent record a warning when it drops an unparseable entry from a permission-bearing
+key?
+
+Chrome and Firefox record a warning; Safari does not.
+</div>
+
+<div class=issue>
+Should an unparseable entry in `content_scripts.matches` fail the whole extension's load, or
+only that one entry?
+
+Chrome and Firefox fail the whole load. Safari drops the one unparseable entry (or, if every
+entry in one content script definition fails, that definition) and still loads the extension.
 </div>

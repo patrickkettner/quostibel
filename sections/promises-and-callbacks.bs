@@ -24,10 +24,11 @@ its last argument, in addition to the method's own parameters. Calling the metho
 callback present uses the <dfn>callback form</dfn>: the [=user agent=] invokes the callback with
 the method's result once it is available, and the method call itself returns `undefined`.
 Calling the method without a trailing callback uses the <dfn>promise form</dfn>: the method
-returns a promise that resolves with that same result, and no callback is invoked. A given call
-uses one form or the other; supplying a callback does not also produce a usable promise, and
-omitting one does not also invoke a callback. This holds independently of whether the extension's
-manifest declares Manifest V2 or Manifest V3: neither form is restricted to one manifest version.
+returns a [=promise type|promise=] that [=resolve|resolves=] with that same result, and no
+callback is invoked. A given call uses one form or the other; supplying a callback does not also
+produce a usable promise, and omitting one does not also invoke a callback. This holds
+independently of whether the extension's manifest declares Manifest V2 or Manifest V3: neither
+form is restricted to one manifest version.
 
 <div class="example">
 `permissions.contains({permissions: ['tabs']})` returns a promise that resolves with a boolean.
@@ -40,32 +41,28 @@ with that boolean and returns `undefined`.
 The callback is invoked with the value the promise would otherwise have resolved with, in the
 same argument shape: a method whose promise resolves with a single value invokes its callback
 with that value as its sole argument, and a method whose promise resolves with `undefined`
-invokes its callback with no arguments.
+invokes its callback with no arguments. A method whose result needs more than one callback
+argument is instead defined without a promise form at all (see
+[[#promises-and-callbacks-one-form-only]]). Firefox's `devtools.inspectedWindow.eval()` disagrees
+with this pattern: its callback is invoked with two positional arguments, a result and an
+exception-info object, while its promise resolves with a single array value bundling the same two
+values.
 
 <div class=issue>
-Does a method's callback ever receive more arguments than its promise resolves with?
-
-* Chrome and Safari: not in any case found. A method whose result would need more than one
-    callback argument is defined without a promise form at all instead (see
-    [[#promises-and-callbacks-one-form-only]]), rather than giving the two forms different
-    shapes.
-* Firefox: yes, for at least one method. `devtools.inspectedWindow.eval()`'s callback is invoked
-    with two positional arguments (a result and an exception-info object), while its promise
-    resolves with a single array value bundling the same two values.
-
-Whether a method may be defined this way, with the callback and promise forms disagreeing on
-argument shape, or whether the two are always expected to agree, is unresolved.
+Does this specification require a method's callback and promise forms to agree on result shape,
+or may a method define them differently the way Firefox's `devtools.inspectedWindow.eval()` does?
 </div>
 
 ### Errors ### {#promises-and-callbacks-errors}
 
 An asynchronous method that fails communicates the failure differently depending on the form
-used. In the [=promise form=], the returned promise rejects with the error. In the [=callback
-form=], the callback is invoked the same as it would be on success, with no error argument
-added; the error is instead exposed through
+used. In the [=promise form=], the returned promise [=reject|rejects=] with the error. In the
+[=callback form=], the callback is invoked the same as it would be on success, with no error
+argument added; the error is instead exposed through
 [`runtime.lastError`](https://w3c.github.io/webextensions/specification/#extension-runtime) for
-the duration of that one callback invocation, and cleared once the callback returns. A callback
-that does not read `runtime.lastError` when it is set causes a warning to be logged.
+the duration of that one callback invocation, and cleared once the callback returns. The callback
+avoids a logged warning by reading `runtime.lastError` while it is set. Otherwise, the warning is
+logged once the callback returns.
 
 <div class="example">
 ```js
@@ -79,10 +76,15 @@ reports a failure the same way `someNamespace.someMethod(argument)` reports one 
 promise it returns, just through `runtime.lastError` instead of a `catch`.
 </div>
 
+<div class=issue>
+Should this specification define `runtime.lastError`, or reference its definition from wherever
+the `runtime` namespace is specified?
+</div>
+
 ### Methods that support only one form ### {#promises-and-callbacks-one-form-only}
 
-Not every asynchronous method supports both forms. Existing implementations already diverge from
-the general rule above, in opposite directions:
+Not every asynchronous method supports both forms. Chrome and Firefox each diverge from that
+expectation, in opposite directions:
 
 <table class="simple">
 <thead>
@@ -93,14 +95,14 @@ the general rule above, in opposite directions:
 <td>A method supporting only the callback form</td>
 <td>Exists, where the method already has a synchronous return value of its own that a promise
 would collide with</td>
-<td>None found</td>
-<td>None found</td>
+<td>None.</td>
+<td>None.</td>
 </tr>
 <tr>
 <td>A method supporting only the promise form</td>
-<td>None found</td>
-<td>Exists, and is not rare: no callback parameter is defined for the method at all</td>
-<td>None found</td>
+<td>None.</td>
+<td>Exists, across many namespaces: no callback parameter is defined for the method at all</td>
+<td>None.</td>
 </tr>
 </tbody>
 </table>
@@ -116,8 +118,7 @@ callback parameter exists for them at all.
 Does this specification require every asynchronous method it defines to support both forms, or
 does it need to leave room for a method that supports only one?
 
-Chrome's and Firefox's existing exceptions above are not accidents of one method each: Chrome's
-callback-only methods are ones that predate promise support and already return a value
-synchronously, and Firefox has a substantial number of promise-only methods across many
-namespaces. No exception of either kind was found in Safari.
+Chrome's callback-only methods and Firefox's promise-only methods are not accidents of one method
+each: Chrome's predate promise support and already return a value synchronously, and Firefox's
+span many namespaces. Safari has neither exception.
 </div>

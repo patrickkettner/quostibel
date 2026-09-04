@@ -517,12 +517,24 @@ permission can never cover regardless of how it's written.
   gallery, if the implementation has one" clause -- that clause is
   accurate for WebKit as written, since WebKit has none, and needs no
   WebKit-specific addition.
-- `isURLForAnyExtension()`,
-  `Source/WebKit/UIProcess/Extensions/WebExtensionContext.cpp:149-151`,
-  restricts scripting of *any* `webkit-extension://` URL (not just other
-  extensions' -- the check is scheme-based) unless it is the extension's
-  own (`isURLForThisExtension`, lines 144-147, checked ahead of any
-  pattern match in `permissionState()`, line 871).
+- **Correction to an earlier pass of this file**: `isURLForAnyExtension()`,
+  `Source/WebKit/UIProcess/Extensions/WebExtensionContext.cpp:149-151`, is
+  a scheme-based check (true for *any* `webkit-extension://` URL, not just
+  another extension's own). It is called only from
+  `WebExtensionContextAPITabsCocoa.mm:490,524` to pick the content-world
+  type for tab APIs, and is **not** called from `permissionState()`. An
+  earlier version of this note claimed it gated `permissionState()` at
+  line 871; that line calls `isURLForThisExtension()` instead (grants the
+  extension's own base URL implicitly). For a granted wildcard pattern
+  (`<all_urls>`-style), `WebExtensionMatchPattern::matchesURL()`
+  (`WebExtensionMatchPattern.cpp:368-378`) matches any URL whose scheme is
+  in `supportedSchemes()` -- which includes `webkit-extension` -- without
+  checking the host at all, so no explicit gate against a granted wildcard
+  pattern matching *another* extension's `webkit-extension://` page was
+  found in `permissionState()` or `WebExtensionMatchPattern::matchesURL()`
+  in this pass. Whether some other layer (navigation/process isolation,
+  not the permission system) blocks this in practice was not chased
+  further; left as an open point below rather than asserted either way.
 
 ## Open / unresolved points (not enough source evidence in this pass)
 
@@ -539,3 +551,32 @@ permission can never cover regardless of how it's written.
    left out of the normative draft text and only mentioned as Issues,
    since the working group would need to decide whether such
    browser/enterprise-level restrictions belong in this spec at all.
+3. Cross-extension access to another extension's own extension-scheme
+   pages. **Chromium confirmed**: `PermissionsData::IsRestrictedUrl`,
+   `extensions/common/permissions/permissions_data.cc:164-170`, blocks a
+   `chrome-extension://` URL whose host isn't the requesting extension's
+   own ID unless `switches::AreExtensionsOnExtensionURLsAllowed()`
+   (`permissions_data.cc:164`) -- gated the same way, and by the same
+   `CanExecuteScriptEverywhere` component/policy-installed bypass at the
+   top of the function (`permissions_data.cc:128-130`), as the
+   `chrome://` restriction already in draft.bs's restricted-URLs list.
+   **Gecko checked, not confirmed**: `WebExtensionPolicyCore::CanAccessURI`
+   (`WebExtensionPolicy.cpp:325-349`) has no `moz-extension`-host-vs-own-id
+   check; access to another extension's `moz-extension://` page turns
+   purely on `mHostPermissions->Matches`, and the `MatchPatternCore`
+   constructor (`MatchPattern.cpp:245,271-279`) accepts an explicit
+   `moz-extension` scheme
+   in a pattern the same as any other scheme. Whether a granted pattern
+   naming another extension's `moz-extension://` host would actually
+   resolve to that extension's real content (versus failing for an
+   unrelated reason, e.g. the UUID being per-install and unguessable) was
+   not chased further. **WebKit checked, not confirmed** -- see the
+   correction above: no explicit host-based cross-extension gate was
+   found in `permissionState()` or `WebExtensionMatchPattern::matchesURL()`
+   for a granted wildcard pattern. draft.bs's restricted-URLs list states
+   this restriction generically ("Another extension's own pages, except
+   where an implementation-specific flag ... overrides this"), matching
+   the list's existing convention of stating a restriction category
+   without asserting all three implementations enforce it (the gallery
+   bullet already does this, hedged "if the implementation has one"); it
+   is not asserted as a three-way behavioral finding.

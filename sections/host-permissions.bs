@@ -24,7 +24,7 @@ spec:infra; type:dfn; text:user agent
 # Host permissions # {#host-permissions}
 
 A <dfn>host permission</dfn> is a [=match pattern=] listed in
-[`host_permissions`](https://w3c.github.io/webextensions/specification/#key-host_permissions), or granted at runtime as described below. Together
+[`host_permissions`](https://w3c.github.io/webextensions/specification/#key-host_permissions), or granted at runtime per [[#granting-host-permissions]]. Together
 the extension's granted host permissions form its <dfn>granted host
 permissions</dfn>.
 
@@ -56,21 +56,19 @@ and by the `browser` APIs for at least:
 
 ## Restricted URLs ## {#restricted-urls}
 
-An extension's host permissions, including `<all_urls>`, never grant
-[=access to a URL=] whose [=scheme=] is not one of the schemes valid for
-[=match patterns=]. This restriction, and the further restriction of
-specific hosts and schemes described below, governs every access path that
-is mediated by host permissions (content scripts, and API access such as
+A host permission grants [=access to a URL=] only when the URL's
+[=scheme=] is one of the schemes permitted in a [=match pattern=];
+`<all_urls>` is no exception. This governs every access path that is
+mediated by host permissions (content scripts, and API access such as
 `webRequest`, `cookies`, and `tabs`). It does not by itself describe a
 browser-specific debugging API such as Chrome's `debugger` permission,
 which is out of scope for this section; where such an API exists, an
 implementation should state its own access boundary rather than relying on
-this one, since the two need not coincide. In Chrome specifically,
-`chrome.debugger.attach()` bypasses the requirement that a URL fall within
-the extension's granted host permissions, while remaining subject to the
-scheme and specific-host restrictions described below. A browser instance
-launched with external remote debugging (for example
-`--remote-debugging-port`) is outside this specification's scope
+this one, since the two need not coincide. In Chrome specifically, that
+debugging API bypasses the requirement that a URL fall within the
+extension's granted host permissions, while remaining subject to the
+scheme and specific-host restrictions in this section. External remote
+debugging of a browser instance is outside this specification's scope
 regardless.
 
 Implementations additionally restrict specific hosts and schemes beyond
@@ -82,6 +80,8 @@ whether a granted [=match pattern=] would otherwise match:
 * The implementation's own privileged/internal pages (browser UI
     pages), except where an implementation-specific flag or a component
     or policy-installed extension overrides this.
+* Another extension's own pages, except where an implementation-specific
+    flag or a component or policy-installed extension overrides this.
 * Domains an implementation-specific allowlist marks as always
     off-limits, for example to protect account-management or
     extension-store login flows.
@@ -89,21 +89,20 @@ whether a granted [=match pattern=] would otherwise match:
 Issue: Should this specification normatively list restricted hosts and schemes, require the
 restricted set to be discoverable at runtime, or leave it implementation-defined as today?
 
-None of Chrome, Firefox, or Safari currently declare the restricted set above in a way an
-extension can discover at runtime.
+No implementation currently exposes the restricted set to an extension at runtime.
 
 ## Granting host permissions ## {#granting-host-permissions}
 
 A [=match pattern=] listed in [`host_permissions`](https://w3c.github.io/webextensions/specification/#key-host_permissions) is a <dfn>required host permission</dfn>.
 
 An <dfn>optional host permission</dfn> is a host permission the extension may hold without it
-being granted at install: one listed in [`optional_host_permissions`](https://w3c.github.io/webextensions/specification/#key-optional_host_permissions),
-or a [=required host permission=] withheld from the extension until granted as described in
-this section. An optional host permission is not part of the extension's [=granted host
+being granted at install: a pattern listed in [`optional_host_permissions`](https://w3c.github.io/webextensions/specification/#key-optional_host_permissions),
+or one listed in [`host_permissions`](https://w3c.github.io/webextensions/specification/#key-host_permissions) that the user agent has withheld until
+requested. An optional host permission is not part of the extension's [=granted host
 permissions=] until granted.
 
-Chrome and Firefox both grant required host permissions automatically at
-install time, then let the user subsequently withhold a granted host
+Chrome and Firefox both grant [=required host permission|required host permissions=]
+automatically at install time, then let the user subsequently withhold a granted host
 permission from a specific site through browser UI, at which point the
 extension's effective access to that site reverts to a runtime-request
 flow even though the permission is still listed as required in the
@@ -111,10 +110,10 @@ manifest. WebKit's engine performs no automatic grant at all, for either
 required or optional host permissions; the embedding application is
 responsible for presenting required permissions to the user (for example
 at install or update) and recording the result, and nothing in the engine
-forces this to happen or guarantees a required host permission is granted
+forces this to happen or guarantees a [=required host permission=] is granted
 by the time the extension runs.
 
-This specification does not require required host permissions to be
+This specification does not require [=required host permission|required host permissions=] to be
 granted automatically at install, nor does it require user consent before
 every use. The standardized `optional_host_permissions` manifest key lets
 an extension author declare which host permissions are not required for
@@ -164,7 +163,7 @@ A granted host permission does not change this outcome, even
 `<all_urls>`.
 
 <div class=note>
-Chrome, Firefox, and Safari arrived at the content-script rule above differently:
+Chrome, Firefox, and Safari arrived at this content-script rule differently:
 
 * Chrome removed cross-origin content script fetches as a platform
     change (Chrome 73 CORB, Chrome 85 CORS enforcement, allowlist fully
@@ -240,8 +239,7 @@ When is the temporary grant `activeTab` creates revoked? Chrome, Firefox, and Sa
     cross-origin navigation (same-origin navigations, and any subframe
     navigation, leave it intact).
 * Safari revokes it when the tab's main frame commits a URL no longer
-    matched by the granted pattern, which is close to Chrome's rule in
-    practice.
+    matched by the granted pattern.
 * Firefox does not revoke it on navigation at all: source comments state
     this is a deliberate difference from Chrome, and the grant instead
     tracks the surviving lifetime of the tab's inner window (including
@@ -249,9 +247,7 @@ When is the temporary grant `activeTab` creates revoked? Chrome, Firefox, and Sa
     action is invoked again for a different tab or the tab/window is
     destroyed.
 
-"Cross-origin navigation of the top-level document" (the Chrome/Safari behavior) is the more
-restrictive and privacy-preserving option, but is not what Firefox ships today. Tracked at
-[w3c/webextensions#657](https://github.com/w3c/webextensions/issues/657), open as of 2026-05-02.
+Tracked at [w3c/webextensions#657](https://github.com/w3c/webextensions/issues/657), open as of 2026-05-02.
 </div>
 
 <div class="example">

@@ -26,9 +26,9 @@ spec:infra; type:dfn; text:user agent
 
 A <dfn export>glob</dfn> is a [=string=] matched against a URL. It may
 contain the <dfn>wildcard</dfn> characters `*`, which matches zero or
-more characters, and `?`, which matches one character. Every other
-character matches only itself, so a glob with no wildcards matches only
-a URL identical to it.
+more characters, and `?`. Every character other than a [=wildcard=]
+matches only itself, so a glob with no wildcards matches only a URL
+identical to it.
 
 Glob matching is case-sensitive.
 

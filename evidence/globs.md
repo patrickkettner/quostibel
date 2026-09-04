@@ -255,3 +255,11 @@ includeGlobPatternStrings = filterObjects(*includeGlobPatternStrings, [](auto& v
 
 ## Resolution of the manifest `content_scripts` empty-glob-list question
 Traced end to end from the schema through the WebIDL dictionary default to the C++ match check (see section 5, Gecko): the `content_scripts` manifest path does not carry the `nonEmptyOrNull` normalization the `userScripts` runtime API applies, so `"include_globs": []` in a manifest is a real divergence from Chromium, and from Gecko's own `userScripts` API, not an open question.
+
+## 7. Whether a parse algorithm is warranted
+
+A match pattern has a grammar with real failure modes (no `://`, no `path`, a bad `host` shape) that a `parse a match pattern` algorithm and an "unparseable" statement can meaningfully describe. A glob has no such grammar: the two engines that implement matching accept any string as a glob. Chromium's `ParseGlobs` (`extensions/common/utils/content_script_utils.cc:389-401`) appends every string in the manifest array without validating its shape. Gecko's `MatchGlobCore` constructor (`MatchPattern.cpp:747-801`) always compiles successfully -- it branches on whether the string contains a wildcard character, never on whether the string is well-formed, because there is no ill-formed shape to check for. Neither engine has a rejection path for a glob string, unlike the version-string and match-pattern grammars. Conclusion: no `parse a glob` algorithm and no "unparseable glob" statement are warranted for `sections/globs.bs`; there is nothing for either to describe.
+
+## 8. Note on the section's own definition text
+
+The section's lead paragraph previously stated flatly that `?` "matches one character," immediately followed by an issue asking whether `?` matches exactly one character or zero-or-one. Since the "Verdict" in section 1 above is that this exact claim is the error already published in upstream `index.bs` (see also the README's second correction), stating it as settled fact in this draft's own definition reproduced the error it exists to flag. The definition now describes `*` and `?` as the two wildcard characters without asserting `?`'s match count, leaving that entirely to the issue that already states both engines' positions.

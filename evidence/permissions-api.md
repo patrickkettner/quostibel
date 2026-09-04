@@ -291,6 +291,17 @@ promise / raise a callback error in all three instead:
   `WebExtensionCallbackHandler::reportError` (`Source/WebKit/WebProcess/Extensions/Bindings/
   JSWebExtensionWrapper.cpp:134-149`, rejecting when a promise `m_rejectFunction` is present).
 
+Chrome's message count for `request()`'s three named failure conditions (missing user
+activation, unlisted permission, unlisted origin): the missing-activation check is a separate
+`if` returning `Error(kUserGestureRequiredError)` (`permissions_api.cc:319-323`), while the
+unlisted-permission and unlisted-origin checks are combined into a single condition,
+`!unpack_result->unlisted_apis.empty() || !unpack_result->unlisted_hosts.is_empty()`, returning
+one shared `Error(kNotInManifestPermissionsError)` (`permissions_api.cc:350-353`; the same
+combined condition and constant recur for `remove()` at `permissions_api.cc:229-231`). So Chrome
+surfaces two distinct messages for these three conditions, not three: a missing activation gets
+its own message, and an unlisted permission is not distinguishable by message alone from an
+unlisted origin.
+
 ### Enterprise/managed policy blocking
 
 - Chrome: explicit check, `kBlockedByEnterprisePolicy`, via
@@ -329,6 +340,43 @@ three engines:
   `extension->allRequestedMatchPatterns()` plus `extension->optionalPermissionMatchPatterns()`
   and rejects any requested pattern with no match
   (`WebExtensionAPIPermissionsCocoa.mm:178-224`).
+
+### `remove()` resolves `true` unconditionally on success
+
+Checked directly (this claim was previously supported only by citing an open GitHub issue's own
+argument, not by reading the three engines; the underlying code fact is now confirmed):
+
+- Chrome: `PermissionsRemoveFunction::Run()` has exactly one success path, and it is
+  unconditional: `PermissionsUpdater(...).RevokeOptionalPermissions(..., base::BindOnce(
+  &PermissionsRemoveFunction::Respond, this, ArgumentList(api::permissions::Remove::Results::
+  Create(true))))` (`permissions_api.cc:209-272`, the literal `true` at `:270`). Every other
+  branch in `Run()` returns `RespondNow(Error(...))` instead of reaching this call, so the
+  function never responds with `false`.
+- Firefox: `async remove(permissions)` ends with a bare `return true;` after `await
+  ExtensionPermissions.remove(...)` (`ext-permissions.js:255-273`, `return true;` at `:273`).
+  The schema's `remove` function entry declares its callback with an empty `parameters: []`
+  (`permissions.json:130-145`), but this does not clip the resolved value: `wrapPromise()`
+  invokes the callback with whatever the implementation function actually returned
+  (`ExtensionCommon.sys.mjs:874-899`, `applySafe(callback, [args], caller)` at `:896` where
+  `args` is the promise's resolved value), independent of the schema's declared parameter list.
+  So the schema's empty parameter list is a stale/inaccurate doc annotation, not evidence that
+  `remove()` returns nothing.
+- WebKit: `WebExtensionContext::permissionsRemove()` unconditionally calls
+  `removeGrantedPermissions(permissions)` and `removeGrantedPermissionMatchPatterns(matchPatterns,
+  EqualityOnly::No)`, then resolves with `!hasPermissions(permissions, matchPatterns)`
+  (`WebExtensionContext.cpp:160-171`). `hasPermissions()` checks whether any of the given
+  permissions or match patterns are still present (`WebExtensionContext.cpp:807-828`); since the
+  two preceding calls already removed exactly those permissions and patterns, `hasPermissions()`
+  finds none of them, so `!hasPermissions(...)` is `true`. This boolean crosses to the JS-facing
+  callback/promise value directly, with no further transformation
+  (`WebExtensionAPIPermissionsCocoa.mm:146-148`,
+  `callback->call(JSValueMakeBoolean(callback->globalContext(), success))`).
+
+None of the three has a code path that reaches the success response with `false`; a request to
+remove something not currently optional and granted is rejected earlier, before any of these
+success-path calls (see the "Granting host permissions beyond `optional_host_permissions`"
+citations above, and the `remove()`-specific unlisted-permission/-origin check at
+`permissions_api.cc:229-231` for Chrome).
 
 ## 3. The `Permissions` dictionary
 
@@ -624,6 +672,14 @@ spec change required.
 - Origin path-stripping in `origins` entries (section 3): resolved for Firefox (yes, at storage
   time); WebKit's parse-time behavior confirmed (no stripping), its match-time consequence left
   unchecked as a bounded, explicitly-scoped gap.
+- Whether `remove()` ever resolves `false` on success in any of the three engines (section 2,
+  "`remove()` resolves `true` unconditionally on success"): resolved by reading each engine's
+  success path directly; none has one. Previously the draft cited only an open GitHub issue's
+  own argument for this.
+- Whether Chrome's `request()` uses a distinct rejection message for each of a missing user
+  activation, an unlisted permission, and an unlisted origin (section 2, "Validation failures"):
+  resolved. It uses two messages, not three; the unlisted-permission and unlisted-origin checks
+  share one message.
 
 ## Undetermined / not independently confirmed in this pass
 

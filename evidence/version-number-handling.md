@@ -375,6 +375,17 @@ exactly as authored, in all three engines:
   (`Source/WebKit/UIProcess/API/Cocoa/WKWebExtension.h:130`). No comparison
   or validation logic touches it beyond the fallback.
 
+Mozilla's non-implementation of `version_name` is a schema/code-path absence
+(previous bullet); separately, Mozilla has stated a position on why. Bugzilla
+[1380219](https://bugzilla.mozilla.org/show_bug.cgi?id=1380219) (checked
+directly, not via a secondary source) is RESOLVED WONTFIX. The add-ons team's
+final comment gives two reasons: the version string is part of an add-on's
+identity, and allowing developers to customize it could confuse users who
+need to communicate about which version they are using; and there are no
+clear benefits to `version_name` weighed against that risk. This is Mozilla's
+stated position, cited in the spec text as exactly that -- a decision and its
+reasoning -- not as evidence of what any code path does.
+
 ## Summary table
 
 | | Chromium | Gecko | WebKit |

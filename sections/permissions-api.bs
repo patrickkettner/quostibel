@@ -151,10 +151,9 @@ some or all of |permissions| that are not already part of its [=granted permissi
     permissions=], and every [=match pattern=] in |permissions|["origins"] is [=subsumed=] by the
     extension's [=granted host permissions=], resolve with `true`.
 1. Prompt the user to approve the permissions and origins in |permissions| that are not already
-    part of the extension's [=granted permissions=] or [=granted host permissions=]. User agents
-    may skip the prompt, and grant automatically, when the newly requested permissions and
-    origins carry no additional user-facing warnings beyond what the extension is already
-    granted.
+    part of the extension's [=granted permissions=] or [=granted host permissions=]. Skip this
+    prompt, and grant those permissions and origins automatically, if they carry no additional
+    user-facing warnings beyond what the extension is already granted.
 1. If the user does not approve the prompt, resolve with `false`.
 1. Grant the extension the requested permissions and origins not already in its [=granted
     permissions=] or [=granted host permissions=]. This fires {{permissions/onAdded}} for the
@@ -162,11 +161,11 @@ some or all of |permissions| that are not already part of its [=granted permissi
 1. Resolve with `true`.
 
 Issue: What does `request()` reject with, for a missing user activation, an
-unlisted permission, or an unlisted origin? Chrome rejects with an `Error`
-carrying a fixed message per case (for example `kUserGestureRequiredError`,
-`kNotInManifestPermissionsError`). Firefox rejects with an `ExtensionError`.
-Safari reports a callback/promise error with no named type. This
-specification does not define a shared error identity.
+unlisted permission, or an unlisted origin? Chrome rejects with an `Error`:
+one fixed message for a missing user activation, and a second, shared
+fixed message for an unlisted permission or an unlisted origin. Firefox
+rejects with an `ExtensionError`. Safari reports a callback/promise error
+with no named type.
 
 Issue: What happens when no window is available to show the prompt in,
 separate from the user-activation requirement? Chrome rejects, distinctly
@@ -204,17 +203,16 @@ extension's optional [=granted permissions=] and [=granted host permissions=].
 <div class=issue>
 Why does `remove()` resolve with `undefined` here, when every shipping browser resolves `true`?
 
-* All three browsers currently resolve `true` on success.
-* [w3c/webextensions#1069](https://github.com/w3c/webextensions/issues/1069) (open) argues the
-    boolean is meaningless, since `remove()` never resolves `false`.
-* The sibling case is `alarms.clearAll()`,
-    [w3c/webextensions#1055](https://github.com/w3c/webextensions/issues/1055); the 2026-08-13
-    WECG minutes record a Mozilla engineer saying he would be fine dropping its return value too.
+* All three browsers currently resolve `true` on success; none has been found to resolve
+    `false`.
+* [w3c/webextensions#1069](https://github.com/w3c/webextensions/issues/1069) (open) argues a
+    boolean that never varies carries no information, and proposes dropping it. The sibling
+    case is `alarms.clearAll()`,
+    [w3c/webextensions#1055](https://github.com/w3c/webextensions/issues/1055).
 
-This specification follows #1069 rather than current behavior; no browser resolves `undefined`
-here today. `request()` and `contains()` are not affected: both resolve a boolean that carries
-real information (whether the request was granted, whether the extension has the permission),
-so neither changes.
+`request()` and `contains()` are not affected: both resolve a boolean that carries real
+information (whether the request was granted, whether the extension has the permission), so
+neither changes.
 </div>
 
 ## Events ## {#permissions-events}
@@ -240,21 +238,18 @@ interface PermissionsEvent {
 The <dfn attribute for="permissions">onAdded</dfn> event fires with a {{Permissions}}
 dictionary listing the permissions and origins newly granted to the extension, whenever the
 extension's [=granted permissions=] or [=granted host permissions=] increase. This includes grants made through
-{{permissions/request}}, and grants made through user agent UI outside of the `permissions` API
-(for example, a browser action letting the user grant a withheld host permission).
+{{permissions/request}}, and grants made through user agent UI outside of the `permissions` API,
+for example the user agent's own controls for granting a withheld host permission.
 
-Chrome explicitly does not fire `onAdded`/`onRemoved` for permission or host-permission grants
-driven entirely by administrative or managed policy. Firefox and Safari both disagree with
-Chrome here, for different reasons. Firefox's policy-driven permission revocation runs through
-the same
-internal grant/revoke function the `permissions` API itself calls, with no suppression for the
-policy case, so it fires `onRemoved` the same as an API-driven or user-driven change would.
-Safari's engine fires `onAdded`/`onRemoved` whenever the embedding application sets the
-extension's granted or denied permissions, regardless of why the application did so; since a
-managed policy on Safari is applied by the application setting those same properties (see above),
-a policy-driven change fires the event there too, unless the application takes some further step
-outside the engine to suppress it, which is not something the open-source engine controls one way
-or the other.
+<div class=issue>
+Should `onAdded`/`onRemoved` fire for a permission or host-permission change driven entirely by
+administrative or managed policy?
+
+* Chrome does not fire either event for a policy-driven change.
+* Firefox and Safari fire the event for a policy-driven change, the same as for any other
+    change.
+
+</div>
 
 ### `onRemoved` ### {#permissions-onremoved}
 

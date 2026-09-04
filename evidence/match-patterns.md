@@ -723,3 +723,119 @@ up empty, that one definition) and still loads the extension. The
 common ground across every case examined: an unparseable pattern is never
 treated as though it matched anything -- it is dropped, or its container is
 dropped, or the whole load is aborted, but it never contributes a match.
+
+## 10. Corrections made during quality review, with citations
+
+Three factual errors were found in the draft while checking it line by line
+against the rubric that requires every changed technical statement to be
+re-verified against source. All three were checked directly against
+`~/chromium/src`, `~/firefox`, and `~/WebKit` (read only, not built).
+
+### Chrome's `chrome://` scheme is not policy/enterprise-gated
+
+The draft claimed Chrome accepts its own `chrome://` WebUI scheme in a match
+pattern "(policy/enterprise contexts only)". That is not what the source
+shows. It is gated by a command-line switch, not an enterprise policy:
+
+- `extensions/common/switches.cc:29`: `kExtensionsOnChromeURLs =
+  "extensions-on-chrome-urls"`.
+- `extensions/common/switches.cc:70-81`:
+  `AreExtensionsOnChromeURLsAllowed()` returns true only if
+  `base::CommandLine::ForCurrentProcess()->HasSwitch(kExtensionsOnChromeURLs)`
+  (and only if a kill-switch Finch feature,
+  `kDisableExtensionsOnChromeUrlsSwitch`, `extensions/common/extension_features.h:274-277`,
+  isn't enabled).
+- `extensions/common/permissions/permissions_data.cc:156-159`: this same
+  function gates `chrome://` access generally (not just for content
+  scripts).
+- `extensions/common/permissions/permissions_data.cc:116-126`:
+  `CanExecuteScriptEverywhere()` bypasses the restriction only for component
+  extensions (`ManifestLocation::kComponent`) or a small hardcoded
+  `ScriptingAllowlist` of extension IDs baked into the client -- neither of
+  which is an IT-administered enterprise policy.
+
+No enterprise policy (e.g. `ExtensionInstallForcelist`-style) reference was
+found anywhere in this call chain. The spec text was corrected to describe
+this as "only in a non-default developer configuration" rather than naming
+the switch (implementation internals are out of scope for spec text) or
+mischaracterizing it as policy/enterprise-controlled.
+
+### Firefox's `<all_urls>` does not include `moz-extension`
+
+The draft claimed every browser's `<all_urls>` includes that browser's own
+extension scheme "except Chrome's, which never does" -- implying Firefox's
+does. Source shows otherwise:
+
+- `toolkit/components/extensions/MatchPattern.cpp:83-85`:
+  `PermittedSchemes()` = `{http, https, ws, wss, file, ftp, data}` -- no
+  `moz-extension`.
+- `toolkit/components/extensions/MatchPattern.cpp:252-256`:
+  `<all_urls>` sets `mSchemes = permittedSchemes` directly, i.e. exactly
+  that fixed set, nothing added for the extension's own scheme.
+
+Cross-checked against WebKit and Chromium to confirm the other two
+attributions in the same sentence are correct:
+
+- `Source/WebKit/UIProcess/Extensions/WebExtensionMatchPattern.cpp:62-66`:
+  `supportedSchemes()` = `{"*", http, https, webkit-extension}`.
+  `registerCustomURLScheme()` (`:94-105`) adds the real
+  `safari-web-extension` scheme to this same set at runtime, and
+  `matchesURL()`'s `m_matchesAllURLs` branch (`:375-378`) checks
+  `supportedSchemes().contains(...)` -- so Safari's `<all_urls>` does
+  include its own extension scheme.
+- `extensions/common/extension.cc:217-221` (`kValidHostPermissionSchemes`)
+  and `extensions/common/user_script.cc:69-73`
+  (`kValidUserScriptSchemes`): neither mask includes
+  `URLPattern::SCHEME_EXTENSION` -- confirms Chrome's exclusion, already
+  established in section 4 above.
+
+The spec text was corrected to "Safari's `<all_urls>` also includes its own
+extension scheme... Chrome's and Firefox's do not."
+
+### All three browsers gate `file:` access behind a separate opt-in, not just Safari
+
+The draft's `<all_urls>` example table showed Chrome and Firefox running a
+content script on `file:///home/user/x.html` unconditionally, with only
+Safari requiring "file access has separately been granted". Section 4
+above already established that WebKit's `<all_urls>` matching itself
+excludes `file:` unless `Options::AllowFileScheme` is passed (default off) --
+a match-pattern-algorithm-level gate. Checking whether Chrome and Firefox
+have an equivalent gate (at a different layer: outside the match-pattern
+grammar/matching code, in the surrounding permission/injection machinery)
+turned up one for each:
+
+- Chrome: `extensions/browser/extension_prefs.cc:1424-1430`
+  (`ExtensionPrefs::AllowFileAccess`, backed by `kPrefAllowFileAccess`,
+  `ReadPrefAsBooleanAndReturn` defaults to `false` when the pref is unset,
+  `extension_prefs.cc:825-830`). `extensions/browser/extension_util.cc:209-213`
+  (`util::AllowFileAccess`) and `:373-384`
+  (`InitializeFileSchemeAccessForExtension`) show the renderer process is
+  only granted the `file:` scheme
+  (`ChildProcessSecurityPolicy::GrantRequestScheme`) when this pref is
+  true. A match pattern naming `file:` still parses and matches the
+  grammar; the browser simply won't act on it without this separate,
+  per-extension, default-off grant.
+- Firefox: `modules/libpref/init/StaticPrefList.yaml:6666-6669`
+  (`extensions.webextensions.fileSchemeAccess.requireOptIn`, default
+  `true`) -- comment reads "When true, access to file:-schemes requires an
+  additional opt-in by the user, on top of the host permission."
+  `toolkit/components/extensions/WebExtensionPolicy.cpp:326`:
+  `HasPermission(nsGkAtoms::fileSchemeAllowedPermission)`.
+  `toolkit/components/extensions/test/xpcshell/test_ext_file_access.js:30-52`
+  (`test_no_content_scripts_without_internal_permission`) directly
+  demonstrates a content script matching `file:///*` in `<all_urls>` not
+  running without the `internal:fileSchemeAllowed` permission separately
+  granted.
+
+This is a different mechanism per browser (WebKit bakes it into the match
+function itself; Chrome and Firefox gate it in a separate permission layer
+outside match-pattern matching proper), but the observable end result the
+example table is illustrating -- does a content script actually run on a
+`file:` URL by default -- is the same for all three. The table's `file:`
+row was corrected to show the same "runs only if file access has
+separately been granted" outcome for Chrome, Firefox, and Safari alike.
+The main `<all_urls>` scheme-set table (section 4 above, "file: yes/yes/
+opt-in") was left unchanged: it is specifically about whether `file` is in
+each browser's match-pattern-level permitted scheme set, which is a
+different question, and Chrome's and Firefox's schemes masks do include
+`file` unconditionally at that grammar level.
