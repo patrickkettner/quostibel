@@ -144,8 +144,10 @@ if [ "$standalone_failures" -ne 0 ] || [ "$merged_pass" != true ] || [ "$escapin
 fi
 
 # Banned characters. The em dash is not used anywhere in this repository.
-if grep -rl $'—' . --exclude-dir=.git --exclude-dir=out --exclude-dir=bsvenv >/dev/null 2>&1; then
+# The pattern is written as an escape so this check does not match itself.
+EMDASH=$(printf '\u2014')
+if grep -rln "$EMDASH" . --exclude-dir=.git --exclude-dir=out --exclude-dir=bsvenv >/dev/null 2>&1; then
   echo "FAIL: em dash found in:" >&2
-  grep -rn $'—' . --exclude-dir=.git --exclude-dir=out --exclude-dir=bsvenv >&2
+  grep -rn "$EMDASH" . --exclude-dir=.git --exclude-dir=out --exclude-dir=bsvenv >&2
   exit 1
 fi
